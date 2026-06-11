@@ -27,6 +27,11 @@ Thumbs.db
 # ST-Link tools (binaries)
 assert/
 
+# App runtime files
+app/settings.json
+app/can_presets.json
+app/test/TEST_REPORT.md
+
 # CubeMX reference demos (source of truth, not source code)
 STM32F103C8T6/
 STM32F407VET6/
