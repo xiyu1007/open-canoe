@@ -1,0 +1,151 @@
+##########################################################################################################################
+# Open-Canoe — Makefile for STM32F407VET6
+# Toolchain: arm-none-eabi-gcc
+# Build:     make -f Makefile_f407
+##########################################################################################################################
+
+######################################
+# target
+######################################
+TARGET = open_canoe_f407
+
+######################################
+# building variables
+######################################
+DEBUG = 1
+OPT = -Og
+
+#######################################
+# paths
+#######################################
+BUILD_DIR = build_f407
+HW_DIR = .
+MCU_DIR = $(HW_DIR)/f407
+
+######################################
+# C sources
+######################################
+C_SOURCES = \
+src/main.c \
+src/protocol_handler.c \
+src/can_driver.c \
+src/adc_driver.c \
+src/comm_driver.c \
+src/device_manager.c \
+src/sysmem.c \
+src/syscalls.c \
+$(MCU_DIR)/system_stm32f4xx.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_can.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_adc.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_uart.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_usart.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_dma.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_dma_ex.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_gpio.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_rcc.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_rcc_ex.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_cortex.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_flash.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_flash_ex.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_pwr.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_pwr_ex.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_exti.c \
+$(MCU_DIR)/HAL/Src/stm32f4xx_hal_tim.c
+
+# ASM sources
+ASM_SOURCES = \
+$(MCU_DIR)/startup_stm32f407xx.s
+
+#######################################
+# binaries
+#######################################
+PREFIX = arm-none-eabi-
+ifdef GCC_PATH
+CC = $(GCC_PATH)/$(PREFIX)gcc
+AS = $(GCC_PATH)/$(PREFIX)gcc -x assembler-with-cpp
+CP = $(GCC_PATH)/$(PREFIX)objcopy
+SZ = $(GCC_PATH)/$(PREFIX)size
+else
+CC = $(PREFIX)gcc
+AS = $(PREFIX)gcc -x assembler-with-cpp
+CP = $(PREFIX)objcopy
+SZ = $(PREFIX)size
+endif
+HEX = $(CP) -O ihex
+BIN = $(CP) -O binary -S
+
+#######################################
+# CFLAGS
+#######################################
+# cpu (Cortex-M4 with FPU)
+CPU = -mcpu=cortex-m4
+FPU = -mfpu=fpv4-sp-d16
+FLOAT-ABI = -mfloat-abi=hard
+MCU = $(CPU) -mthumb $(FPU) $(FLOAT-ABI)
+
+# macros
+C_DEFS = \
+-DUSE_HAL_DRIVER \
+-DSTM32F407xx
+
+# includes
+C_INCLUDES = \
+-I$(HW_DIR)/inc \
+-I$(HW_DIR) \
+-I$(MCU_DIR) \
+-I$(MCU_DIR)/HAL/Inc \
+-I$(MCU_DIR)/HAL/Inc/Legacy \
+-I$(MCU_DIR)/CMSIS/Device/ST/STM32F4xx/Include \
+-I$(MCU_DIR)/CMSIS/Core/Include
+
+ASFLAGS = $(MCU) $(OPT) -Wall -fdata-sections -ffunction-sections
+CFLAGS += $(MCU) $(C_DEFS) $(C_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
+
+ifeq ($(DEBUG), 1)
+CFLAGS += -g -gdwarf-2
+endif
+
+CFLAGS += -MMD -MP -MF"$(@:%.o=%.d)"
+
+#######################################
+# LDFLAGS
+#######################################
+LDSCRIPT = $(MCU_DIR)/STM32F407XX_FLASH.ld
+LIBS = -lc -lm -lnosys
+LDFLAGS_COMMON = $(MCU) -specs=nano.specs $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
+
+all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin
+
+#######################################
+# build
+#######################################
+OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
+vpath %.c $(sort $(dir $(C_SOURCES)))
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
+vpath %.s $(sort $(dir $(ASM_SOURCES)))
+
+$(BUILD_DIR)/%.o: %.c Makefile_f407 | $(BUILD_DIR)
+	$(CC) -c $(CFLAGS) -Wa,-a,-ad,-alms=$(BUILD_DIR)/$(notdir $(<:.c=.lst)) $< -o $@
+
+$(BUILD_DIR)/%.o: %.s Makefile_f407 | $(BUILD_DIR)
+	$(AS) -c $(CFLAGS) $< -o $@
+
+$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS) Makefile_f407
+	@sed 's/(READONLY) //g' $(LDSCRIPT) > $(BUILD_DIR)/temp.ld
+	$(CC) $(OBJECTS) $(LDFLAGS_COMMON) -T$(BUILD_DIR)/temp.ld -o $@
+	$(SZ) $@
+
+$(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
+	$(HEX) $< $@
+
+$(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
+	$(BIN) $< $@
+
+$(BUILD_DIR):
+	mkdir $@
+
+clean:
+	-rm -fR $(BUILD_DIR)
+
+-include $(wildcard $(BUILD_DIR)/*.d)

@@ -1,0 +1,32 @@
+# Build outputs
+hardware/build_f103/
+hardware/build_f407/
+
+# Python virtual environment
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Embedded skills local config
+.embeddedskills/
+
+# ST-Link tools (binaries)
+assert/
+
+# CubeMX reference demos (source of truth, not source code)
+STM32F103C8T6/
+STM32F407VET6/
