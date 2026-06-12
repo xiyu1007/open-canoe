@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import time, tkinter as tk
 from tkinter import ttk
-from canoe.gui.config import *
-from canoe.gui.lang import L
+from gui.config import *
+from gui.lang import L
 
 
 class LogPanel(ttk.Frame):

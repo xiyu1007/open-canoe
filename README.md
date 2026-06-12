@@ -1,5 +1,10 @@
 # Open-Canoe / 开放独木舟
 
+**EN** · Open CAN bus analyzer — STM32 hardware probe + native desktop GUI.  
+**CN** · 开源 CAN 总线分析仪 — STM32 硬件探针 + 原生桌面应用。
+
+---
+
 **[English](#english) | [中文](#中文)**
 
 ---
@@ -7,201 +12,258 @@
 <a name="english"></a>
 ## English
 
-Extensible CAN bus analysis tool — hardware firmware side.
+### Overview
 
-Open-Canoe is a CAN bus analyzer that runs on STM32 microcontrollers. It supports CAN message monitoring (with microsecond timestamps), optional ADC waveform acquisition, and communication with a PC host via USART or USB-CDC using a custom binary protocol. The architecture is built on a clean hardware abstraction layer — adding support for a new MCU requires only one new directory under `hardware/`.
+Open-Canoe is an enterprise-grade CAN bus analysis tool that replaces proprietary solutions like ZCANPRO. It consists of two components:
 
-### Supported MCUs
+| Component | Technology | Location |
+|-----------|-----------|----------|
+| Desktop App | Python 3.11+ / tkinter | `open-canoe/` |
+| Hardware Probe Firmware | C / STM32 HAL | `firmware/` |
 
-| MCU | Core | Flash | CAN | ADC | USB CDC | Status |
-|-----|------|-------|-----|-----|---------|--------|
-| STM32F103C8T6 | Cortex-M3 | 64 KB | 1 | Yes | No | Supported |
-| STM32F407VET6 | Cortex-M4 | 512 KB | 2 | Yes | Yes | Supported |
+The two communicate via USART or USB-CDC using a custom binary protocol. The architecture enforces strict separation — the App never depends on firmware internals, and new MCU support requires zero App changes.
 
-### Build Environment
+### Features
 
-- **Toolchain**: `arm-none-eabi-gcc` (ARM Embedded Toolchain, 10.3+)
-- **Build system**: GNU Make
-- **Windows**: [ARM GNU Toolchain](https://developer.arm.com/downloads/-/gnu-rm) + MSYS2 Make
-- **Linux/macOS**: `apt install arm-none-eabi-gcc` / `brew install arm-none-eabi-gcc`
+**App (Desktop GUI)**
+- Real-time CAN message trace with color-coded table (standard/extended/error)
+- Message composer: standard/extended frames, remote frames (RTR), error frames
+- Cycle scheduler with configurable interval
+- CAN ID filtering (message filter + display filter, independent levels)
+- TX/RX toggle with radio-button behavior
+- Message collapse by ID (deduplication)
+- Auto-increment data on cycle send
+- Silent mode (listen-only) with send-button lockout
+- Loopback mode (self-test) — no external CAN bus needed for testing
+- Signal detail panel with raw hex + uint8/16/32 LE/BE decode
+- Waveform probe popup window (requires ADC-capable hardware)
+- Colored log panel (info/warn/error)
+- Bilingual ZH/EN — instant switch via menu
+- Resizable panels via PanedWindow with layout reflow
+- Demo mode — fully functional without hardware
+
+**Firmware (Hardware Probe)**
+- CAN bus monitoring with microsecond-precision timestamps
+- CAN frame transmission (standard/extended/remote)
+- CAN error detection & reporting (CRC, stuff, form, ACK, bus-off)
+- Optional ADC waveform acquisition (DMA, continuous mode)
+- Dual physical interface: USART + USB-CDC
+- Hardware abstraction layer — add new MCU without touching core code
+- Capability query mechanism (ADC, multi-CAN, USB CDC)
+- Boot heartbeat for automatic device identification
+
+### Supported Hardware
+
+| MCU | Core | Flash | CAN | ADC | USB CDC | Firmware |
+|-----|------|-------|-----|-----|---------|----------|
+| STM32F103C8T6 | Cortex-M3 | 64 KB | 1 ch | Yes | No | `firmware/f103/` |
+| STM32F407VET6 | Cortex-M4 | 512 KB | 2 ch | Yes | Yes | `firmware/f407/` |
 
 ### Quick Start
 
 ```bash
+# Clone
+git clone <repo-url> canoe && cd canoe
+
+# Run the desktop app (no install required)
+cd open-canoe
+uv run python main.py
+```
+
+The app starts in demo mode — all features work without hardware.
+
+### Build Firmware
+
+```bash
+# Prerequisites: arm-none-eabi-gcc (10.3+), GNU Make
 cd tools
 
-# Build + flash (recommended)
+# Build + flash via ST-Link (recommended)
 python build.py flash f103       # STM32F103C8T6
 python build.py flash f407       # STM32F407VET6
 
 # Build only
 python build.py build f103
-python build.py list             # List targets (JSON)
+
+# List supported targets (JSON)
+python build.py list
 
 # Manual build
-cd ../hardware
+cd ../firmware
 make -f Makefile_f103
-make -f Makefile_f407
 ```
 
-Output: `hardware/build_f103/open_canoe_f103.bin` (or `build_f407/`).
-
-### Test
+### Test Firmware
 
 ```bash
 uv venv && uv pip install pyserial
 
 # Full protocol test
-.venv\Scripts\python tools\test_pyserial.py COM7
+.venv/Scripts/python tools/test_pyserial.py COM7
 
 # Single command
-.venv\Scripts\python tools\send_cmd.py COM7 info
-.venv\Scripts\python tools\send_cmd.py COM7 caps
-.venv\Scripts\python tools\send_cmd.py COM7 status
-.venv\Scripts\python tools\send_cmd.py COM7 adc
+.venv/Scripts/python tools/send_cmd.py COM7 info
+.venv/Scripts/python tools/send_cmd.py COM7 caps
 ```
 
 ### Project Structure
 
 ```
-hardware/
-├── f103/                       # STM32F103C8T6 (all MCU-specific files)
-│   ├── stm32f103_config.h      # Pin map, clocks, features (created by us)
-│   ├── stm32f1xx_hal_conf.h    # HAL module selection (created by us)
-│   ├── startup_stm32f103xb.s   # Startup (copied from CubeMX)
-│   ├── STM32F103XX_FLASH.ld    # Linker script (copied from CubeMX)
-│   ├── system_stm32f1xx.c      # System init (copied from CubeMX)
-│   ├── CMSIS/                  # CMSIS headers (copied from CubeMX)
-│   └── HAL/                    # HAL drivers (copied from CubeMX, used modules only)
-├── f407/                       # STM32F407VET6
-│   └── ... (same structure)
-├── inc/                        # Hardware-abstracted headers (shared, no MCU deps)
-│   ├── protocol.h              # Wire protocol frame format
-│   ├── can_api.h               # CAN API
-│   ├── adc_api.h               # ADC API
-│   ├── comm_api.h              # Communication API
-│   ├── device_api.h            # Device info API
-│   └── device_config.h         # Auto-selects MCU config
-├── src/                        # Firmware source (shared, HAL-based)
-│   ├── main.c                  # Entry point & main loop
-│   ├── protocol_handler.c      # Protocol encode/decode (pure C)
-│   ├── can_driver.c            # CAN driver
-│   ├── adc_driver.c            # ADC driver
-│   ├── comm_driver.c           # USART + USB CDC driver
-│   ├── device_manager.c        # Device identity & capabilities
-│   ├── sysmem.c                # Memory stubs (copied from CubeMX)
-│   └── syscalls.c              # System call stubs (copied from CubeMX)
-├── Makefile_f103
-└── Makefile_f407
-
-tools/                          # PC-side tools
-├── build.py                    # Unified build/flash (for App integration)
-├── send_cmd.py                 # Send single protocol command
-└── test_pyserial.py            # Full protocol test suite
+canoe/
+├── SPECIFICATION.md              # Canonical development specification (read first!)
+├── CLAUDE.md                     # AI assistant guidance
+├── README.md                     # This file
+│
+├── open-canoe/                   # Desktop App (Python)
+│   ├── main.py                   # Entry point
+│   ├── pyproject.toml            # Dependencies
+│   ├── settings.yaml             # User config (optional)
+│   └── canoe/
+│       ├── config/               # Settings loader + defaults
+│       ├── core/                 # Protocol codec + serial transport
+│       └── gui/                  # UI components (tkinter/ttk)
+│
+├── firmware/                     # Hardware Probe Firmware (C)
+│   ├── inc/                      # Hardware-abstracted API headers
+│   ├── src/                      # Shared driver implementations
+│   ├── f103/                     # STM32F103C8T6 config + HAL + CMSIS
+│   ├── f407/                     # STM32F407VET6 config + HAL + CMSIS
+│   ├── Makefile_f103
+│   └── Makefile_f407
+│
+├── test/                         # Test scripts
+│   ├── test_protocol.py          # Protocol codec unit tests
+│   └── test_hardware.py          # Full hardware integration test
+│
+└── tools/                        # Build & test utilities
+    ├── build.py                  # Unified build/flash tool
+    ├── send_cmd.py               # Single protocol command sender
+    └── test_pyserial.py          # Full protocol test suite
 ```
+
+### Communication Protocol
+
+The App and firmware communicate via a binary framed protocol:
+
+```
+Frame: Magic(0xA5) + Length(LE16) + Cmd(1B) + Seq(LE16) + Data(0..256B) + CRC16(LE16) + EndMagic(0x5A)
+CRC:   CRC-CCITT, polynomial 0x1021, initial 0xFFFF
+```
+
+Full specification in [SPECIFICATION.md](SPECIFICATION.md) §3.
 
 ### Adding a New MCU
 
-Example: adding STM32H750VB.
+1. Create `firmware/<mcu>/` — copy CubeMX files (startup, linker, CMSIS, HAL)
+2. Create `stm32<xxx>_config.h` + `stm32<xxx>_hal_conf.h` (use existing as template)
+3. Create `Makefile_<mcu>` (copy existing, adjust flags)
+4. Register in `tools/build.py` TARGETS dict
+5. **No changes** to `inc/`, `src/`, `tools/`, or App code
 
-**Step 1: Generate CubeMX demo**
-
-Create a minimal CubeMX project for the new MCU with USART enabled. Note the demo path, e.g. `STM32H750VB/STM32H750VB_DEMO/`.
-
-**Step 2: Create `hardware/h7/`**
-
-Copy files from the CubeMX demo:
+### Hardware Wiring (F103 + SN65HVD230)
 
 ```
-hardware/h7/
-├── startup_stm32h750xx.s       ← from DEMO/ (do not modify)
-├── STM32H750XX_FLASH.ld        ← from DEMO/ (do not modify)
-├── system_stm32h7xx.c          ← from DEMO/Core/Src/ (do not modify)
-├── CMSIS/Core/Include/         ← from DEMO/Drivers/CMSIS/Core/Include/ (all files)
-├── CMSIS/Device/ST/STM32H7xx/Include/ ← from DEMO/Drivers/CMSIS/Device/... (all files)
-└── HAL/Inc/ + HAL/Src/         ← from DEMO/Drivers/STM32H7xx_HAL_Driver/
-                                   Inc: all files (headers, small)
-                                   Src: only used modules (see Makefile)
+STM32F103       SN65HVD230
+PB8 (CAN_RX) →  CRXD (pin 4)
+PB9 (CAN_TX) →  CTXD (pin 1)
+GND          →  GND
+3.3V         →  VCC
 ```
 
-**Step 3: Create our config files**
+### Development
 
-```
-hardware/h7/
-├── stm32h7xx_config.h          ← pin maps, clocks, features (use stm32f407_config.h as template)
-└── stm32h7xx_hal_conf.h        ← enable HAL modules we use (CAN, USART, ADC, DMA, etc.)
-```
+```bash
+# App
+cd open-canoe
+uv run python main.py
 
-**Step 4: Create `hardware/Makefile_h7`**
+# Protocol unit tests (no hardware needed)
+uv run python ../test/test_protocol.py
 
-Copy `Makefile_f407`, adjust:
-- `MCU_DIR = $(HW_DIR)/h7`
-- `-DSTM32H750xx`
-- CPU/FPU flags (`-mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard`)
-- HAL source paths (`stm32h7xx_hal_xxx.c`)
-- Device CMSIS path
-
-**Step 5: Register target**
-
-Add to `tools/build.py` TARGETS dict:
-```python
-"h7": {
-    "name": "STM32H750VB",
-    "makefile": "Makefile_h7",
-    "build_dir": "build_h7",
-    "flash_addr": "0x08000000",
-    "bin": "open_canoe_h7.bin",
-    "hex": "open_canoe_h7.hex",
-},
+# Hardware integration tests
+uv run python ../test/test_hardware.py COM7          # Full test suite
+uv run python ../test/test_hardware.py COM7 --loopback  # Loopback quick test
+uv run python ../test/test_hardware.py --scan           # Scan for devices
 ```
 
-**No changes needed** to `src/`, `inc/`, `tools/send_cmd.py`, or `tools/test_pyserial.py`.
+### Documentation
 
-### Key Rules
+- [SPECIFICATION.md](SPECIFICATION.md) — Development specification (protocol, architecture, integration plan)
+- [CLAUDE.md](CLAUDE.md) — AI agent guidance
 
-- Files copied from CubeMX (`startup_*.s`, `*_FLASH.ld`, `system_*.c`, `CMSIS/`, `HAL/`, `sysmem.c`, `syscalls.c`) **must not be modified**.
-- Only our config files (`*_config.h`, `*_hal_conf.h`) and shared `src/`/`inc/` are edited.
-- HAL Src: only copy the `.c` files listed in the Makefile (CAN, USART, ADC, DMA, GPIO, RCC, TIM, etc.). Do not copy unused modules (ETH, I2C, SPI, etc.).
+### License
 
-### FAQ
-
-**Q: Does the hardware start CAN listening automatically on boot?**
-No. After initialization, the firmware waits for App commands. CAN listening starts only upon receiving `CMD_CAN_START_LISTEN`.
-
-**Q: What happens on F103 when the App requests ADC sampling?**
-If ADC is configured (`HAS_ADC=1`), it works normally. If not, the hardware returns `ERR_ADC_NOT_AVAILABLE`.
-
-**Q: Can I use both USART and USB-CDC simultaneously?**
-No. One active channel at a time. Switch via `CMD_COMM_SET_INTERFACE`.
-
-**Q: How accurate are the timestamps?**
-Microsecond resolution via 1 MHz free-running timer (TIM2). 32-bit counter wraps every ~71 minutes.
+TBD
 
 ---
 
 <a name="中文"></a>
 ## 中文
 
-可扩展的 CAN 总线分析工具 — 硬件固件端。
+### 概述
 
-Open-Canoe 是一个运行在 STM32 微控制器上的 CAN 总线分析器。支持 CAN 报文监听（微秒级时间戳）、可选的 ADC 波形采集，以及通过 USART 或 USB-CDC 使用自定义二进制协议与 PC 主机通信。架构基于清晰的硬件抽象层 —— 添加新 MCU 只需在 `hardware/` 下新增一个目录。
+Open-Canoe 是一款企业级 CAN 总线分析工具，可替代 ZCANPRO 等商业方案。由两个组件构成：
 
-### 支持的 MCU
+| 组件 | 技术 | 位置 |
+|------|------|------|
+| 桌面应用 | Python 3.11+ / tkinter | `open-canoe/` |
+| 硬件探针固件 | C / STM32 HAL | `firmware/` |
 
-| MCU | 内核 | Flash | CAN | ADC | USB CDC | 状态 |
+二者通过 USART 或 USB-CDC 使用自定义二进制协议通信。架构强制分离 — App 不依赖固件内部实现，新增 MCU 无需修改 App。
+
+### 功能特性
+
+**App（桌面 GUI）**
+- 实时 CAN 报文追踪，彩色表格（标准帧/扩展帧/错误帧）
+- 报文编辑器：标准帧/扩展帧、远程帧（RTR）、错误帧
+- 周期发送，可配置间隔
+- CAN ID 过滤（报文过滤 + 显示过滤，两级独立）
+- TX/RX 单选切换
+- 报文折叠（相同 ID 去重）
+- 数据自增发送
+- 静默模式（仅监听），发送按钮自动锁定
+- 环回模式（自测），无需外部 CAN 总线即可测试
+- 信号详情面板，支持原始 hex + uint8/16/32 LE/BE 解码
+- 波形探头弹窗（需支持 ADC 的硬件）
+- 彩色日志面板（信息/警告/错误）
+- 中英文双语，菜单即时切换
+- 可拖拽调整的面板布局
+- 演示模式 — 无硬件可完整体验
+
+**固件（硬件探针）**
+- CAN 总线监听，微秒级时间戳
+- CAN 报文发送（标准帧/扩展帧/远程帧）
+- CAN 错误检测与上报（CRC、位填充、格式、应答、总线关闭）
+- 可选 ADC 波形采集（DMA 连续模式）
+- 双物理接口：USART + USB-CDC
+- 硬件抽象层 — 新增 MCU 无需修改核心代码
+- 能力查询机制（ADC、多路 CAN、USB CDC）
+- 启动心跳自动设备识别
+
+### 支持硬件
+
+| MCU | 内核 | Flash | CAN | ADC | USB CDC | 固件 |
 |-----|------|-------|-----|-----|---------|------|
-| STM32F103C8T6 | Cortex-M3 | 64 KB | 1 | 有 | 无 | 已支持 |
-| STM32F407VET6 | Cortex-M4 | 512 KB | 2 | 有 | 有 | 已支持 |
-
-### 编译环境
-
-- **工具链**: `arm-none-eabi-gcc` (ARM Embedded Toolchain, 10.3+)
-- **构建系统**: GNU Make
-- **Windows**: [ARM GNU Toolchain](https://developer.arm.com/downloads/-/gnu-rm) + MSYS2 Make
+| STM32F103C8T6 | Cortex-M3 | 64 KB | 1 路 | 有 | 无 | `firmware/f103/` |
+| STM32F407VET6 | Cortex-M4 | 512 KB | 2 路 | 有 | 有 | `firmware/f407/` |
 
 ### 快速开始
 
 ```bash
+# 克隆
+git clone <repo-url> canoe && cd canoe
+
+# 运行桌面应用（无需手动安装依赖）
+cd open-canoe
+uv run python main.py
+```
+
+程序以演示模式启动，全部功能可正常使用。
+
+### 编译固件
+
+```bash
+# 前置条件：arm-none-eabi-gcc (10.3+)、GNU Make
 cd tools
 
 # 编译 + 烧录（推荐）
@@ -210,351 +272,72 @@ python build.py flash f407       # STM32F407VET6
 
 # 仅编译
 python build.py build f103
-python build.py list             # 列出目标 (JSON)
 
-# 手动编译
-cd ../hardware
-make -f Makefile_f103
-make -f Makefile_f407
+# 列出目标（JSON）
+python build.py list
 ```
 
-产物：`hardware/build_f103/open_canoe_f103.bin`（或 `build_f407/`）。
-
-### 测试
+### 测试固件
 
 ```bash
 uv venv && uv pip install pyserial
 
 # 完整协议测试
-.venv\Scripts\python tools\test_pyserial.py COM7
+.venv/Scripts/python tools/test_pyserial.py COM7
 
 # 单条命令
-.venv\Scripts\python tools\send_cmd.py COM7 info
-.venv\Scripts\python tools\send_cmd.py COM7 caps
+.venv/Scripts/python tools/send_cmd.py COM7 info
 ```
 
 ### 项目结构
 
-```
-hardware/
-├── f103/                       # STM32F103C8T6（所有 MCU 专属文件）
-│   ├── stm32f103_config.h      # 引脚、时钟、功能（我们创建）
-│   ├── stm32f1xx_hal_conf.h    # HAL 模块选择（我们创建）
-│   ├── startup_stm32f103xb.s   # 启动文件（从 CubeMX 复制，不修改）
-│   ├── STM32F103XX_FLASH.ld    # 链接脚本（从 CubeMX 复制，不修改）
-│   ├── system_stm32f1xx.c      # 系统初始化（从 CubeMX 复制，不修改）
-│   ├── CMSIS/                  # CMSIS 头文件（从 CubeMX 复制，不修改）
-│   └── HAL/                    # HAL 驱动（从 CubeMX 复制，仅保留用到的模块）
-├── f407/                       # STM32F407VET6
-│   └── ...（同样结构）
-├── inc/                        # 硬件无关头文件（共享）
-├── src/                        # 固件源码（共享，基于 HAL）
-├── Makefile_f103
-└── Makefile_f407
+参见 English 版本的目录树。
 
-tools/                          # PC 端工具
-├── build.py                    # 统一编译/烧录入口
-├── send_cmd.py
-└── test_pyserial.py
-```
-
-### 添加新 MCU
-
-以添加 STM32H750VB 为例：
-
-**步骤 1：生成 CubeMX Demo**
-
-为新 MCU 创建最小 CubeMX 项目（启用 USART），记录路径。
-
-**步骤 2：创建 `hardware/h7/`**
-
-从 CubeMX Demo 复制文件：
+### 通信协议
 
 ```
-hardware/h7/
-├── startup_stm32h750xx.s       ← 来自 DEMO/（不修改）
-├── STM32H750XX_FLASH.ld        ← 来自 DEMO/（不修改）
-├── system_stm32h7xx.c          ← 来自 DEMO/Core/Src/（不修改）
-├── CMSIS/Core/Include/         ← 来自 DEMO/Drivers/CMSIS/Core/Include/（全部）
-├── CMSIS/Device/ST/STM32H7xx/Include/ ← 来自 DEMO/Drivers/CMSIS/Device/...（全部）
-└── HAL/Inc/ + HAL/Src/         ← 来自 DEMO/Drivers/STM32H7xx_HAL_Driver/
-                                   Inc: 全部头文件（很小）
-                                   Src: 只用 Makefile 中列出的 .c 文件
+帧格式: Magic(0xA5) + Length(LE16) + Cmd(1B) + Seq(LE16) + Data(0..256B) + CRC16(LE16) + EndMagic(0x5A)
+CRC:    CRC-CCITT, 多项式 0x1021, 初始值 0xFFFF
 ```
 
-**步骤 3：创建配置文件**
+完整规范见 [SPECIFICATION.md](SPECIFICATION.md) §3。
+
+### 新增 MCU
+
+1. 创建 `firmware/<mcu>/` — 复制 CubeMX 文件
+2. 创建 `stm32<xxx>_config.h` + `stm32<xxx>_hal_conf.h`
+3. 创建 `Makefile_<mcu>`
+4. 在 `tools/build.py` 注册
+5. **无需修改** `inc/`、`src/`、`tools/` 或 App 代码
+
+### 硬件接线 (F103 + SN65HVD230)
 
 ```
-hardware/h7/
-├── stm32h7xx_config.h          ← 参考 stm32f407_config.h
-└── stm32h7xx_hal_conf.h        ← 启用 CAN, USART, ADC, DMA 等
+STM32F103       SN65HVD230
+PB8 (CAN_RX) →  CRXD (pin 4)
+PB9 (CAN_TX) →  CTXD (pin 1)
+GND          →  GND
+3.3V         →  VCC
 ```
 
-**步骤 4：创建 `hardware/Makefile_h7`**
-
-复制 `Makefile_f407`，修改：
-- `MCU_DIR = $(HW_DIR)/h7`
-- `-DSTM32H750xx`
-- CPU/FPU 标志（`-mcpu=cortex-m7` 等）
-- HAL 源文件路径
-- CMSIS 路径
-
-**步骤 5：注册目标**
-
-在 `tools/build.py` 的 TARGETS 中添加：
-```python
-"h7": {"name": "STM32H750VB", "makefile": "Makefile_h7", ...}
-```
-
-**无需修改** `src/`、`inc/`、`tools/send_cmd.py`、`tools/test_pyserial.py`。
-
-### 核心规则
-
-- 从 CubeMX 复制的文件（`startup_*.s`、`*_FLASH.ld`、`system_*.c`、`CMSIS/`、`HAL/`、`sysmem.c`、`syscalls.c`）**不得修改**
-- 只有我们创建的配置文件（`*_config.h`、`*_hal_conf.h`）和共享的 `src/`/`inc/` 可以修改
-- HAL Src：只复制 Makefile 中列出的模块（CAN、USART、ADC、DMA、GPIO、RCC、TIM 等），不要复制无关模块（ETH、I2C、SPI 等）
-
-### 常见问题
-
-**Q: 硬件上电后会自动开始 CAN 监听吗？**
-不会。初始化完成后，固件等待 App 命令。
-
-**Q: F103 上 App 请求 ADC 采样会怎样？**
-如果配置启用了 ADC（`HAS_ADC=1`），正常工作。否则返回 `ERR_ADC_NOT_AVAILABLE`。
-
-**Q: 能同时使用 USART 和 USB-CDC 吗？**
-不能。同一时间只使用一个通道。
-
-**Q: 时间戳精度如何？**
-微秒级，通过 1 MHz 定时器（TIM2）实现。
-
-# Canoe — Open CAN Bus Analyzer / 开源 CAN 总线分析仪
-
-**EN** · CAN bus analyzer with STM32 hardware probe and native desktop GUI.
-
-**CN** · 基于 STM32 硬件探测器的 CAN 总线分析仪，原生桌面界面。
-
----
-
-**EN** | [中文](#中文)
-
----
-
-## EN
-
-### Features
-
-- **MCU selector** — STM32F103C8T6 / STM32F407VET6 target switching
-- **Real-time message trace** — color-coded table (standard=dark, extended=blue, error=red)
-- **Message composer** — send standard/extended CAN frames, error frames
-- **Cycle scheduler** — periodic send with configurable interval, one-click start/stop
-- **OBD-II presets** — RPM, Speed, VIN, Coolant, TPMS quick-send buttons
-- **Bitrate configuration** — 100k / 125k / 250k / 500k / 1M bps
-- **Silent mode** — listen-only, no ACK
-- **Signal detail panel** — raw hex + uint8/16/32 decode on row selection
-- **Waveform probe** — separate popup window for CAN bus signal visualization
-- **Colored log panel** — timestamped info/error/warning messages, collapsible
-- **USB CDC + UART** — auto-detected, graceful fallback
-- **Demo mode** — fully functional without hardware
-
-### Quick Start
+### 测试
 
 ```bash
-# Clone
-git clone <repo-url> canoe && cd canoe
+cd open-canoe
 
-# Run (uv auto-resolves dependencies)
-uv run python main.py
+# 协议单元测试（无需硬件）
+uv run python ../test/test_protocol.py
+
+# 硬件集成测试
+uv run python ../test/test_hardware.py COM7          # 完整测试
+uv run python ../test/test_hardware.py COM7 --loopback  # 环回快速测试
+uv run python ../test/test_hardware.py --scan           # 扫描设备
 ```
 
-No install required. The app starts in demo mode — send messages, test cycle mode, explore all features without hardware.
+### 文档
 
-### Layout
-
-```
-┌──────────────┬──────────────────────────────┬──────────────┐
-│  DEVICE BAR  │  MESSAGE TRACE (Treeview)    │  SEND PANEL  │
-│  MCU Target  │  No│Time  │ID    │DLC│Data   │  CAN ID      │
-│  [Connect]   │  1 │12:.. │0x7DF │8  │02 01..│  Type/DLC    │
-│  Bitrate     │  2 │12:.. │0x601 │3  │03 22..│  Data hex    │
-│  Waveform    │  ...                          │  [Send Once] │
-│  Filters     │                               │  [Cycle]     │
-│              ├───────────────────────────────┤  Presets     │
-│              │  SIGNAL DETAILS               │              │
-│              │  Raw: ID/Type/DLC/Data        │              │
-│              │  Decoded: uint8/16/32         │              │
-├──────────────┴───────────────────────────────┴──────────────┤
-│  LOG / ERRORS (collapsible)                                  │
-├──────────────────────────────────────────────────────────────┤
-│  ● Connected — COM3 │ RX: 1250 msg/s │ TX: 42 │ Errors: 0   │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### Hardware
-
-| Component | Recommended |
-|-----------|-------------|
-| MCU | STM32F103C8T6 (Blue Pill) or STM32F407VET6 |
-| CAN Transceiver | SN65HVD230 (3.3V) or TJA1050 |
-| Connection | USB (CDC) or USB-TTL (UART) |
-
-#### Wiring (F103 + SN65HVD230)
-
-```
-STM32F103     SN65HVD230
-PB8 (CAN_RX)  →  CRXD (pin 4)
-PB9 (CAN_TX)  →  CTXD (pin 1)
-GND           →  GND
-3.3V          →  VCC
-```
-
-### Configuration
-
-Edit `settings.yaml` in the project root:
-
-```yaml
-transport:
-  preferred: usb_cdc
-  serial_baud: 921600
-  auto_connect: false
-
-can:
-  bitrate: 500000
-  silent_mode: false
-
-ui:
-  theme: light
-  max_log_lines: 100000
-```
-
-### Development
-
-```bash
-# Install dev deps
-uv pip install -e ".[dev]"
-
-# Lint & format
-ruff check canoe/ && ruff format canoe/
-
-# Type check
-mypy canoe/
-
-# Run tests
-pytest tests/ -v
-```
-
-See [CLAUDE.md](CLAUDE.md) for the full architecture guide.
-
-### License
-
-TBD
-
----
-
-## 中文
-
-### 功能特性
-
-- **MCU 选择器** — 支持 STM32F103C8T6 / STM32F407VET6 切换
-- **实时报文追踪** — 彩色表格（标准帧深色、扩展帧蓝色、错误帧红色）
-- **报文编辑** — 发送标准帧/扩展帧、错误帧
-- **周期发送** — 可配置间隔的定时循环发送，一键启停
-- **OBD-II 预设** — 转速、车速、VIN、冷却液、胎压等一键发送
-- **波特率配置** — 100k / 125k / 250k / 500k / 1M bps
-- **静默模式** — 仅监听，不应答 ACK
-- **信号详情面板** — 选中行后显示原始 hex + uint8/16/32 解码
-- **波形探头** — 独立弹窗显示 CAN 总线信号波形
-- **彩色日志面板** — 带时间戳的 info/error/warning 消息，可折叠
-- **USB CDC + UART** — 自动检测，优雅降级
-- **演示模式** — 无硬件也可完整体验所有功能
-
-### 快速开始
-
-```bash
-# 克隆仓库
-git clone <repo-url> canoe && cd canoe
-
-# 运行（uv 自动解析依赖）
-uv run python main.py
-```
-
-无需手动安装依赖。程序以演示模式启动——可发送报文、测试周期发送、浏览全部功能。
-
-### 布局
-
-```
-┌──────────────┬──────────────────────────────┬──────────────┐
-│  设备栏       │  报文追踪 (树形表格)           │  发送面板     │
-│  MCU 型号    │  No│时间  │ID    │DLC│数据   │  CAN ID      │
-│  [连接]      │  1 │12:.. │0x7DF │8  │02 01..│  类型/DLC    │
-│  波特率      │  2 │12:.. │0x601 │3  │03 22..│  数据 hex    │
-│  波形        │  ...                          │  [单次发送]   │
-│  过滤器      │                               │  [周期发送]   │
-│              ├───────────────────────────────┤  预设        │
-│              │  信号详情                      │              │
-│              │  原始: ID/类型/DLC/数据        │              │
-│              │  解码: uint8/16/32            │              │
-├──────────────┴───────────────────────────────┴──────────────┤
-│  日志 / 错误（可折叠）                                        │
-├──────────────────────────────────────────────────────────────┤
-│  ● 已连接 COM3 │ RX: 1250 msg/s │ TX: 42 │ 错误: 0          │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 硬件
-
-| 组件 | 推荐型号 |
-|------|---------|
-| 主控 MCU | STM32F103C8T6 (Blue Pill) 或 STM32F407VET6 |
-| CAN 收发器 | SN65HVD230 (3.3V) 或 TJA1050 |
-| 连接方式 | USB (CDC) 或 USB-TTL (UART) |
-
-#### 接线 (F103 + SN65HVD230)
-
-```
-STM32F103     SN65HVD230
-PB8 (CAN_RX)  →  CRXD (pin 4)
-PB9 (CAN_TX)  →  CTXD (pin 1)
-GND           →  GND
-3.3V          →  VCC
-```
-
-### 配置
-
-编辑项目根目录下的 `settings.yaml`：
-
-```yaml
-transport:
-  preferred: usb_cdc
-  serial_baud: 921600
-  auto_connect: false
-
-can:
-  bitrate: 500000
-  silent_mode: false
-
-ui:
-  theme: light
-  max_log_lines: 100000
-```
-
-### 开发
-
-```bash
-# 安装开发依赖
-uv pip install -e ".[dev]"
-
-# 代码检查 & 格式化
-ruff check canoe/ && ruff format canoe/
-
-# 类型检查
-mypy canoe/
-
-# 运行测试
-pytest tests/ -v
-```
-
-完整架构指南参见 [CLAUDE.md](CLAUDE.md)。
+- [SPECIFICATION.md](SPECIFICATION.md) — 开发规范（协议、架构、集成方案）
+- [CLAUDE.md](CLAUDE.md) — AI 助手指南
 
 ### 许可证
 

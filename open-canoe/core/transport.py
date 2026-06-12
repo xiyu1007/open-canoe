@@ -1,9 +1,23 @@
-"""Transport layer — device discovery and serial/USB CDC abstraction."""
+"""Transport layer — device discovery, serial/USB CDC abstraction, frame I/O."""
 
 from __future__ import annotations
 
+import threading
+import time
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from queue import Queue, Empty
+
+from core.protocol import (
+    Frame,
+    Command,
+    decode,
+    encode,
+    unpack_heartbeat,
+    MAGIC_HEADER,
+    END_MAGIC,
+)
+
 
 @dataclass(frozen=True, slots=True)
 class TransportInfo:
@@ -19,15 +33,68 @@ class TransportError(RuntimeError):
     """Raised when no device is found or connection fails."""
 
 
+# ── Frame Receiver ───────────────────────────────────────────────────
+
+
+class FrameReceiver:
+    """Buffers raw bytes and extracts complete protocol frames.
+
+    Handles partial frames (waiting for more data) and multiple frames
+    arriving in the same read chunk.
+    """
+
+    def __init__(self) -> None:
+        self._buf = bytearray()
+
+    def feed(self, data: bytes) -> list[Frame]:
+        """Feed raw bytes, return list of complete frames decoded."""
+        self._buf.extend(data)
+        frames = decode(bytes(self._buf))
+
+        # Trim consumed bytes: find where the last decoded frame ended
+        if frames:
+            # Reconstruct the buffer position after last frame
+            consumed = 0
+            for f in frames:
+                payload_len = len(f.payload)
+                total = 9 + payload_len  # header(6) + payload + footer(3)
+                consumed += total
+            self._buf = self._buf[consumed:]
+        else:
+            # Keep only what might be a partial frame at the end
+            # Find last magic header position
+            for i in range(len(self._buf) - 1, -1, -1):
+                if self._buf[i] == MAGIC_HEADER:
+                    self._buf = self._buf[i:]
+                    break
+            else:
+                # Look for possible end magic
+                for i in range(len(self._buf)):
+                    if self._buf[i] == END_MAGIC and i >= 8:
+                        self._buf = self._buf[i + 1 :]
+                        break
+
+        return frames
+
+    def reset(self) -> None:
+        self._buf.clear()
+
+
+# ── Abstract Transport ───────────────────────────────────────────────
+
+
 class AbstractTransport(ABC):
     @abstractmethod
     def connect(self) -> None: ...
+
     @abstractmethod
     def disconnect(self) -> None: ...
+
     @abstractmethod
     def write(self, data: bytes) -> None: ...
+
     @abstractmethod
-    def read(self, size: int, timeout: float | None = None) -> bytes: ...
+    def incoming(self) -> list[Frame]: ...
 
     @property
     @abstractmethod
@@ -38,31 +105,64 @@ class AbstractTransport(ABC):
     def info(self) -> TransportInfo: ...
 
 
-class SerialTransport(AbstractTransport):
-    """UART or USB CDC transport via pyserial."""
+# ── Serial Transport ─────────────────────────────────────────────────
 
-    def __init__(self, port: str, baudrate: int = 921600) -> None:
+
+class SerialTransport(AbstractTransport):
+    """UART or USB CDC transport via pyserial with background frame reader."""
+
+    def __init__(self, port: str, baudrate: int = 115200) -> None:
         self._port = port
         self._baudrate = baudrate
         self._ser = None
+        self._rx_thread: threading.Thread | None = None
+        self._running = False
+        self._receiver = FrameReceiver()
+        self._frame_queue: Queue = Queue()
 
     def connect(self) -> None:
         import serial as _serial
 
         if self._ser is not None:
             return
-        self._ser = _serial.Serial(self._port, self._baudrate, timeout=0.1)
+        self._ser = _serial.Serial(self._port, self._baudrate, timeout=0.05)
+        self._running = True
+        self._rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
+        self._rx_thread.start()
 
     def disconnect(self) -> None:
-        if self._ser is None:
-            return
-        self._ser.close()
-        self._ser = None
+        self._running = False
+        if self._rx_thread and self._rx_thread.is_alive():
+            self._rx_thread.join(timeout=1.0)
+        self._rx_thread = None
+        if self._ser is not None:
+            try:
+                self._ser.close()
+            except Exception:
+                pass
+            self._ser = None
+        self._receiver.reset()
+        # Drain queue
+        while not self._frame_queue.empty():
+            try:
+                self._frame_queue.get_nowait()
+            except Empty:
+                break
 
     def write(self, data: bytes) -> None:
         if self._ser is None:
             raise TransportError("not connected")
         self._ser.write(data)
+
+    def incoming(self) -> list[Frame]:
+        """Non-blocking: return all queued incoming frames."""
+        frames: list[Frame] = []
+        while True:
+            try:
+                frames.append(self._frame_queue.get_nowait())
+            except Empty:
+                break
+        return frames
 
     def read(self, size: int, timeout: float | None = None) -> bytes:
         if self._ser is None:
@@ -88,6 +188,28 @@ class SerialTransport(AbstractTransport):
             baudrate=self._baudrate,
         )
 
+    def _rx_loop(self) -> None:
+        """Background thread: read serial bytes, decode frames, queue them."""
+        while self._running:
+            try:
+                if self._ser is None or not self._ser.is_open:
+                    time.sleep(0.05)
+                    continue
+                waiting = self._ser.in_waiting
+                if waiting > 0:
+                    data = self._ser.read(min(waiting, 1024))
+                    if data:
+                        frames = self._receiver.feed(data)
+                        for f in frames:
+                            self._frame_queue.put(f)
+                else:
+                    time.sleep(0.005)
+            except Exception:
+                time.sleep(0.1)
+
+
+# ── Serial Port Listing ──────────────────────────────────────────────
+
 
 def list_serial_ports() -> list[TransportInfo]:
     """List all available serial/CDC ports."""
@@ -96,31 +218,153 @@ def list_serial_ports() -> list[TransportInfo]:
     results: list[TransportInfo] = []
     for p in comports():
         if p.vid is not None and p.pid is not None:
-            results.append(TransportInfo(
-                port=p.device,
-                transport_type="usb_cdc",
-                vid=p.vid,
-                pid=p.pid,
-                description=p.description or "",
-            ))
+            results.append(
+                TransportInfo(
+                    port=p.device,
+                    transport_type="usb_cdc",
+                    vid=p.vid,
+                    pid=p.pid,
+                    description=p.description or "",
+                )
+            )
         else:
-            results.append(TransportInfo(
-                port=p.device,
-                transport_type="serial",
-                description=p.description or "",
-            ))
+            results.append(
+                TransportInfo(
+                    port=p.device,
+                    transport_type="serial",
+                    description=p.description or "",
+                )
+            )
     return results
 
 
-def auto_detect(baudrate: int = 921600) -> AbstractTransport:
-    """Auto-detect and return the best available CAN probe transport."""
+# ── Auto-Detect ──────────────────────────────────────────────────────
+
+
+def _try_heartbeat(port: str, baudrate: int, timeout: float = 2.0) -> dict | None:
+    """Try to detect a CAN probe on a port by listening for heartbeat."""
+    import serial as _serial
+
+    ser = None
+    try:
+        ser = _serial.Serial(port, baudrate, timeout=0.1)
+        receiver = FrameReceiver()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            waiting = ser.in_waiting
+            if waiting > 0:
+                data = ser.read(min(waiting, 1024))
+                frames = receiver.feed(data)
+                for f in frames:
+                    if f.command == Command.DEVICE_HEARTBEAT:
+                        info = unpack_heartbeat(f.payload)
+                        info["port"] = port
+                        info["baudrate"] = baudrate
+                        return info
+            else:
+                time.sleep(0.02)
+    except Exception:
+        pass
+    finally:
+        if ser is not None:
+            try:
+                ser.close()
+            except Exception:
+                pass
+    return None
+
+
+def auto_detect(baudrates: list[int] | None = None) -> AbstractTransport:
+    """Auto-detect CAN probe by scanning ports for device heartbeat.
+
+    Tries each port at common baudrates. Returns connected transport
+    with the port that responded, or raises TransportError.
+    """
+    if baudrates is None:
+        baudrates = [115200, 921600, 460800, 230400, 1000000]
+
     ports = list_serial_ports()
     if not ports:
         raise TransportError(
-            "No CAN probe detected.\nConnect a device via USB and retry."
+            "No serial ports found.\nConnect a CAN probe via USB and retry."
         )
+
     # Prefer USB CDC devices
-    for p in ports:
-        if p.transport_type == "usb_cdc":
-            return SerialTransport(port=p.port, baudrate=baudrate)
-    return SerialTransport(port=ports[0].port, baudrate=baudrate)
+    cdc_ports = [p for p in ports if p.transport_type == "usb_cdc"]
+    other_ports = [p for p in ports if p.transport_type != "usb_cdc"]
+    ordered = cdc_ports + other_ports
+
+    for p in ordered:
+        for br in baudrates:
+            hb = _try_heartbeat(p.port, br, timeout=1.5)
+            if hb is not None:
+                tr = SerialTransport(port=p.port, baudrate=br)
+                return tr
+
+    raise TransportError(
+        "No CAN probe detected.\n"
+        "Connect a device via USB and retry.\n\n"
+        f"Scanned {len(ordered)} port(s) at {len(baudrates)} baudrate(s)."
+    )
+
+
+def detect_and_connect(
+    port: str | None = None,
+    baudrate: int = 115200,
+) -> tuple[AbstractTransport, dict]:
+    """Connect to a device and wait for heartbeat. Returns (transport, device_info).
+
+    If port is None or 'auto', auto-detects. Otherwise uses the specified port.
+    Returns device info dict from heartbeat.
+    """
+    if port and port != "auto":
+        tr = SerialTransport(port=port, baudrate=baudrate)
+        tr.connect()
+        # Wait for heartbeat
+        deadline = time.monotonic() + 3.0
+        hb = None
+        while time.monotonic() < deadline:
+            frames = tr.incoming()
+            for f in frames:
+                if f.command == Command.DEVICE_HEARTBEAT:
+                    hb = unpack_heartbeat(f.payload)
+                    break
+            if hb:
+                break
+            time.sleep(0.05)
+        if hb is None:
+            # Try higher baudrate
+            tr.disconnect()
+            tr = SerialTransport(port=port, baudrate=921600)
+            tr.connect()
+            deadline = time.monotonic() + 3.0
+            while time.monotonic() < deadline:
+                frames = tr.incoming()
+                for f in frames:
+                    if f.command == Command.DEVICE_HEARTBEAT:
+                        hb = unpack_heartbeat(f.payload)
+                        break
+                if hb:
+                    break
+                time.sleep(0.05)
+        if hb is None:
+            tr.disconnect()
+            raise TransportError(
+                "Device connected but no heartbeat received.\n"
+                "Verify the firmware is flashed correctly."
+            )
+        return tr, hb
+    else:
+        tr = auto_detect()
+        tr.connect()
+        # heartbeat already verified in auto_detect
+        receiver = FrameReceiver()
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            frames = tr.incoming()
+            for f in frames:
+                if f.command == Command.DEVICE_HEARTBEAT:
+                    return tr, unpack_heartbeat(f.payload)
+            time.sleep(0.05)
+        tr.disconnect()
+        raise TransportError("Heartbeat lost after auto-detect.")

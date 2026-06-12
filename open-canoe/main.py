@@ -1,6 +1,6 @@
 """Canoe — Open CAN Bus Analyzer entry point."""
 
-from canoe.gui.app import MainWindow
+from gui.app import MainWindow
 
 
 def main():

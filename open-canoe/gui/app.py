@@ -6,19 +6,44 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading, queue, time
 
-from canoe.config.settings import load_settings
-from canoe.core.models import CANMessage
-from canoe.core.transport import auto_detect, TransportError
-from canoe.core.protocol import encode, Command
+from config.settings import load_settings
+from core.models import CANMessage
+from core.transport import (
+    SerialTransport,
+    TransportError,
+    detect_and_connect,
+    list_serial_ports,
+)
+from core.protocol import (
+    Command,
+    Frame,
+    encode,
+    pack_can_send_frame,
+    pack_can_set_baudrate,
+    pack_can_set_mode,
+    unpack_can_frame_up,
+    unpack_device_info,
+    unpack_capabilities,
+    unpack_ack,
+    unpack_error_notify,
+    CAN_MODE_NORMAL,
+    CAN_MODE_LISTEN_ONLY,
+    CAN_MODE_LOOPBACK,
+    CAN_MODE_LOOPBACK_SILENT,
+    ERR_NONE,
+    ERR_CAN_TX_FAILED,
+    ERR_ADC_NOT_AVAILABLE,
+    ERROR_MESSAGES,
+)
 
-from canoe.gui.config import *
-from canoe.gui.lang import L, set_lang, lang_code
-from canoe.gui.message_table import MessageTable
-from canoe.gui.device_bar import DeviceBar
-from canoe.gui.send_panel import SendPanel
-from canoe.gui.detail_panel import DetailPanel
-from canoe.gui.log_panel import LogPanel
-from canoe.gui.waveform_window import WaveformWindow
+from gui.config import *
+from gui.lang import L, set_lang, lang_code
+from gui.message_table import MessageTable
+from gui.device_bar import DeviceBar
+from gui.send_panel import SendPanel
+from gui.detail_panel import DetailPanel
+from gui.log_panel import LogPanel
+from gui.waveform_window import WaveformWindow
 
 
 class MainWindow:
@@ -33,6 +58,11 @@ class MainWindow:
         self._v_log    = tk.BooleanVar(value=True)
         self._v_left   = tk.BooleanVar(value=True)
         self._v_right  = tk.BooleanVar(value=True)
+
+        # Device state
+        self._dev_info: dict = {}
+        self._caps: dict = {}
+        self._can_active = False
 
         self._build_style()
         self._build_layout()
@@ -75,11 +105,9 @@ class MainWindow:
         tf.pack(fill=tk.X, pady=(0, 8))
         ttk.Label(tf, text=L_["title"], style="Title.TLabel").pack(side=tk.LEFT)
 
-        # 竖向主分割（上方三栏 + 下方日志）
         self._v_pane = ttk.PanedWindow(outer, orient=tk.VERTICAL)
         self._v_pane.pack(fill=tk.BOTH, expand=True)
 
-        # 横向三栏
         self._h_pane = ttk.PanedWindow(self._v_pane, orient=tk.HORIZONTAL)
         self._v_pane.add(self._h_pane, weight=1)
 
@@ -94,11 +122,12 @@ class MainWindow:
             on_waveform=self._open_waveform,
             on_flash=self._flash_dialog,
             on_silent=self._on_silent,
+            on_loopback=self._on_loopback,
         )
         self._dev.pack(fill=tk.BOTH, expand=True)
         self._h_pane.add(self._frame_left, weight=0)
 
-        # 中栏 — 竖向分割（追踪 + 详情）
+        # 中栏
         self._ctr_pane = ttk.PanedWindow(self._h_pane, orient=tk.VERTICAL)
 
         self._frame_trace = ttk.Frame(self._ctr_pane)
@@ -146,7 +175,6 @@ class MainWindow:
         self._relayout()
 
     def _relayout(self) -> None:
-        # 横向 pane: 左中右
         for w in self._h_pane.panes():
             self._h_pane.forget(w)
         if self._v_left.get():
@@ -155,14 +183,12 @@ class MainWindow:
         if self._v_right.get():
             self._h_pane.add(self._frame_right, weight=0)
 
-        # 中栏内部: 追踪 + 详情
         for w in self._ctr_pane.panes():
             self._ctr_pane.forget(w)
         self._ctr_pane.add(self._frame_trace, weight=1)
         if self._v_detail.get():
             self._ctr_pane.add(self._frame_det, weight=0)
 
-        # 竖向 pane: 横向栏 + 日志
         for w in self._v_pane.panes():
             self._v_pane.forget(w)
         self._v_pane.add(self._h_pane, weight=1)
@@ -208,70 +234,299 @@ class MainWindow:
         messagebox.showinfo(L()["menu_lang"],
             "请重启程序使语言设置生效。\nRestart to apply language change.")
 
+    # ── Connection ────────────────────────────────────────────────
+
     def _connect_async(self) -> None:
         if self._tr is not None: self._disconnect(); return
         port = self._dev.selected_port
+        mcu = self._dev.selected_mcu
         self._dev.set_connecting()
         self._status_var.set(L()["connecting"])
-        threading.Thread(target=self._conn_thread, args=(port,), daemon=True).start()
+        threading.Thread(target=self._conn_thread, args=(port, mcu), daemon=True).start()
 
-    def _conn_thread(self, port: str) -> None:
+    def _conn_thread(self, port: str, mcu: str) -> None:
         try:
-            if port and port != "auto":
-                from canoe.core.transport import SerialTransport
-                tr = SerialTransport(port=port, baudrate=self.settings.transport.serial_baud)
-            else:
-                tr = auto_detect(baudrate=self.settings.transport.serial_baud)
-            tr.connect()
-            self._q.put(("ok", tr))
+            tr, hb = detect_and_connect(
+                port=port if port != "auto" else None,
+                baudrate=self.settings.transport.serial_baud,
+            )
+            self._q.put(("ok", tr, hb))
         except TransportError as e:
             self._q.put(("err", str(e)))
+        except Exception as e:
+            self._q.put(("err", f"{L()['conn_failed']}: {e}"))
+
+    def _on_connected(self, tr, hb: dict) -> None:
+        """Called from poll() when connection + heartbeat succeeds."""
+        L_ = L()
+        self._tr = tr
+        self._dev_info = hb
+        self._dev.set_connected(self._tr.info.port)
+        model = hb.get("mcu_model", "Unknown")
+        fw = hb.get("fw_version", "?")
+        self._status_var.set(
+            f"{L_['connected']} — {self._tr.info.port}  |  {model}  FW v{fw}"
+        )
+        self._log.log(
+            f"Device: {model}  FW: v{fw}  Port: {self._tr.info.port}", "ok"
+        )
+
+        # Query capabilities
+        try:
+            self._tr.write(encode(Command.GET_CAPABILITIES))
         except Exception:
-            self._q.put(("err", L()["conn_failed"]))
+            pass
+
+        # Query device info
+        try:
+            self._tr.write(encode(Command.GET_INFO))
+        except Exception:
+            pass
+
+        # Configure CAN after short delay (allow responses to arrive)
+        self.root.after(300, self._configure_can)
+
+    def _configure_can(self) -> None:
+        """Send CAN configuration to hardware after capabilities are known."""
+        if not self._tr or not self._tr.is_connected:
+            return
+
+        # Parse bitrate
+        br_str = self._dev.selected_bitrate.replace(" kbps", "").replace(" Mbps", "")
+        baudrate = int(br_str) * 1000
+        if br_str == "1":
+            baudrate = 1000000
+
+        # Determine mode based on silent + loopback checkboxes
+        silent = self._dev.silent_mode
+        loopback = self._dev.loopback_mode
+        if loopback and silent:
+            mode = CAN_MODE_LOOPBACK_SILENT
+        elif loopback:
+            mode = CAN_MODE_LOOPBACK
+        elif silent:
+            mode = CAN_MODE_LISTEN_ONLY
+        else:
+            mode = CAN_MODE_NORMAL
+
+        try:
+            self._tr.write(encode(Command.CAN_SET_BAUDRATE,
+                                   pack_can_set_baudrate(baudrate, 0)))
+            self._tr.write(encode(Command.CAN_SET_MODE,
+                                   pack_can_set_mode(mode, 0)))
+            self._tr.write(encode(Command.CAN_START_LISTEN))
+            self._can_active = True
+            self._log.log(
+                f"CAN configured: {baudrate//1000}kbps, mode={mode}", "info"
+            )
+        except Exception as e:
+            self._log.log(f"CAN config failed: {e}", "err")
 
     def _disconnect(self) -> None:
         if self._tr:
-            try: self._tr.disconnect()
-            except Exception: pass
+            try:
+                if self._can_active:
+                    self._tr.write(encode(Command.CAN_STOP_LISTEN))
+            except Exception:
+                pass
+            try:
+                self._tr.disconnect()
+            except Exception:
+                pass
             self._tr = None
+        self._can_active = False
+        self._dev_info = {}
+        self._caps = {}
         self._dev.set_disconnected()
         self._status_var.set(L()["disconnected"])
 
+    # ── Poll Loop ─────────────────────────────────────────────────
+
     def _poll(self) -> None:
+        """Main poll: handle async connection results + incoming frames."""
         try:
             while True:
-                kind, data = self._q.get_nowait()
+                kind, *data = self._q.get_nowait()
                 L_ = L()
                 if kind == "ok":
-                    self._tr = data
-                    self._dev.set_connected(self._tr.info.port)
-                    self._status_var.set(f"{L_['connected']} — {self._tr.info.port}")
-                    self._log.log(f"Connected: {self._tr.info.port}", "ok")
+                    tr, hb = data[0], data[1]
+                    self._on_connected(tr, hb)
                 elif kind == "err":
-                    messagebox.showwarning(L_["no_device"], data)
-                    self._log.log(data, "err")
+                    msg = data[0]
+                    messagebox.showwarning(L_["no_device"], msg)
+                    self._log.log(msg, "err")
                     self._dev.set_disconnected()
                     self._status_var.set(L_["disconnected"])
         except queue.Empty:
             pass
+
+        # Process incoming frames from transport
+        self._poll_incoming()
+
         self.root.after(200, self._poll)
+
+    def _poll_incoming(self) -> None:
+        """Read and dispatch incoming protocol frames."""
+        if self._tr is None:
+            return
+        try:
+            frames = self._tr.incoming()
+        except Exception:
+            return
+        for f in frames:
+            self._handle_frame(f)
+
+    def _handle_frame(self, f: Frame) -> None:
+        """Route an incoming protocol frame to the correct handler."""
+        cmd = f.command
+        if cmd == Command.CAN_FRAME_UP:
+            self._handle_can_frame(f)
+        elif cmd == Command.ACK:
+            self._handle_ack(f)
+        elif cmd == Command.NACK:
+            self._log.log("NACK received", "warn")
+        elif cmd == Command.ERROR_NOTIFY:
+            self._handle_error(f)
+        elif cmd == Command.CAPABILITIES_RESP:
+            self._handle_capabilities(f)
+        elif cmd == Command.INFO_RESPONSE:
+            self._handle_info(f)
+        elif cmd == Command.STATUS_RESPONSE:
+            pass  # Status poll response — currently unused
+        elif cmd == Command.DEVICE_HEARTBEAT:
+            pass  # Only expected during connect; ignore in normal operation
+        elif cmd == Command.ADC_DATA_UP:
+            self._handle_adc_data(f)
+        elif cmd == Command.ADC_STATUS_RESP:
+            pass  # Currently unused
+
+    def _handle_can_frame(self, f: Frame) -> None:
+        """Decode and display an incoming CAN frame."""
+        try:
+            d = unpack_can_frame_up(f.payload)
+        except Exception:
+            return
+        msg = CANMessage(
+            arbitration_id=d["arbitration_id"],
+            data=d["data"],
+            is_extended=d["is_extended"],
+            is_error=d["is_error"],
+            is_remote=d["is_remote"],
+            timestamp_us=d["timestamp_us"],
+            channel=d["channel"],
+        )
+        self._tbl.add(msg, is_tx=False)
+        self._tbl.stats.record_rx()
+
+    def _handle_ack(self, f: Frame) -> None:
+        """Handle ACK frame."""
+        try:
+            ack = unpack_ack(f.payload)
+        except Exception:
+            return
+        if ack["error_code"] == ERR_NONE:
+            return  # Success — silent
+        error_msg = ERROR_MESSAGES.get(ack["error_code"],
+                                        f"Error 0x{ack['error_code']:02X}")
+        ack_cmd = ack["ack_cmd"]
+        self._log.log(f"CMD 0x{ack_cmd:02X} failed: {error_msg}", "err")
+
+    def _handle_error(self, f: Frame) -> None:
+        """Handle error notification from firmware."""
+        try:
+            err = unpack_error_notify(f.payload)
+        except Exception:
+            return
+        self._log.log(
+            f"[{err['source']}] {err['error_name']}", "err"
+        )
+        self._tbl.stats.record_error()
+
+    def _handle_capabilities(self, f: Frame) -> None:
+        """Cache device capabilities."""
+        try:
+            self._caps = unpack_capabilities(f.payload)
+            self._log.log(
+                f"Capabilities: ADC={self._caps['has_adc']}, "
+                f"USB_CDC={self._caps['has_usb_cdc']}, "
+                f"CAN ch={self._caps['can_channel_count']}",
+                "info",
+            )
+        except Exception:
+            pass
+
+    def _handle_info(self, f: Frame) -> None:
+        """Cache device info."""
+        try:
+            info = unpack_device_info(f.payload)
+            self._dev_info.update(info)
+        except Exception:
+            pass
+
+    def _handle_adc_data(self, f: Frame) -> None:
+        """Feed ADC data to waveform window."""
+        if self._wave is not None:
+            try:
+                self._wave.feed_adc_data(f.payload)
+            except Exception:
+                pass
+
+    # ── UI Callbacks ──────────────────────────────────────────────
 
     def _on_silent(self, silent: bool) -> None:
         self._snd.set_enabled(not silent)
+        self._update_can_mode()
+
+    def _on_loopback(self, loopback: bool) -> None:
+        self._update_can_mode()
+
+    def _update_can_mode(self) -> None:
+        """Send the current silent + loopback state to firmware."""
+        if not self._tr or not self._tr.is_connected:
+            return
+        silent = self._dev.silent_mode
+        loopback = self._dev.loopback_mode
+        if loopback and silent:
+            mode = CAN_MODE_LOOPBACK_SILENT
+        elif loopback:
+            mode = CAN_MODE_LOOPBACK
+        elif silent:
+            mode = CAN_MODE_LISTEN_ONLY
+        else:
+            mode = CAN_MODE_NORMAL
+        try:
+            self._tr.write(encode(Command.CAN_SET_MODE,
+                                   pack_can_set_mode(mode, 0)))
+            mode_names = {0: "normal", 1: "listen-only",
+                          2: "loopback", 3: "loopback+silent"}
+            self._log.log(f"CAN mode: {mode_names.get(mode, str(mode))}", "info")
+        except Exception as e:
+            self._log.log(f"Mode change failed: {e}", "err")
 
     def _on_filter(self, ftype: str, ids: set[int], mode: str) -> None:
         self._tbl.set_filter(ftype, ids, mode)
 
     def _on_send(self, msg: CANMessage) -> None:
+        # Local display always
         self._tbl.add(msg, is_tx=True)
         L_ = L()
         if msg.is_error:
             self._log.log(L_["send_err_log"], "err")
         elif msg.is_remote:
             self._log.log(f"{L_['send_rtr_log']} ID={msg.id_str}", "info")
+
+        # Send to hardware if connected
         if self._tr and self._tr.is_connected:
             try:
-                self._tr.write(encode(Command.CAN_SEND, msg.data))
+                payload = pack_can_send_frame(
+                    can_id=msg.arbitration_id,
+                    dlc=msg.dlc,
+                    is_extended=msg.is_extended,
+                    is_remote=msg.is_remote,
+                    channel=msg.channel,
+                    data=msg.data,
+                )
+                self._tr.write(encode(Command.CAN_SEND_FRAME, payload))
                 self._tbl.stats.record_tx()
             except Exception as e:
                 self._log.log(f"{L_['send_fail']}: {e}", "err")
@@ -287,7 +542,6 @@ class MainWindow:
             is_ext = vals[3] == L_["type_ext"]
             is_err = vals[3] == L_["type_err"]
             data = bytes.fromhex(vals[6].replace(" ", ""))
-            # Parse timestamp from format "HH:MM:SS.mmm"
             ts_str = vals[1]
             ts_us = 0
             try:

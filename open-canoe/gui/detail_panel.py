@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
-from canoe.gui.config import *
-from canoe.gui.lang import L
-from canoe.core.models import CANMessage
+from gui.config import *
+from gui.lang import L
+from core.models import CANMessage
 
 
 class DetailPanel(ttk.Frame):
