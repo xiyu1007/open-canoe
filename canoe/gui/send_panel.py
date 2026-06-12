@@ -76,8 +76,8 @@ class SendPanel(ttk.Frame):
         cyc_row = ttk.Frame(self, style="Card.TFrame"); cyc_row.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
         ttk.Entry(cyc_row, textvariable=self._ivl_var, font=FONT_BODY, width=6).pack(side=tk.LEFT)
         ttk.Label(cyc_row, text="ms", style="Card.TLabel").pack(side=tk.LEFT, padx=(4, 0))
-        self._btn_cyc = ttk.Button(cyc_row, text=L_["start_cycle"], command=self._toggle_cycle)
-        self._btn_cyc.pack(side=tk.RIGHT)
+        self._btn_cyc = ttk.Button(cyc_row, text=L_["start_cycle"], command=self._toggle_cycle, width=13)
+        self._btn_cyc.pack(side=tk.LEFT, padx=(10, 0))
         self._cyc_lbl = ttk.Label(self, text=f"{L_['sent']} 0",
                                   style="Card.TLabel", foreground=SECONDARY)
         self._cyc_lbl.grid(row=r, column=0, sticky=tk.W); r += 1
@@ -99,7 +99,7 @@ class SendPanel(ttk.Frame):
         ttk.Radiobutton(fm, text=L_["filter_hide"], variable=self._f_mode,
                         value="hide", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
         ttk.Radiobutton(fm, text=L_["filter_off"], variable=self._f_mode,
-                        value="off", command=self._apply_filter).pack(side=tk.LEFT)
+                        value="off", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
 
         s(L_["msg_filter"], r); r += 1
         self._mf_id_var = tk.StringVar(value="")

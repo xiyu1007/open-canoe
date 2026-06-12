@@ -230,8 +230,8 @@ EN = {
                     "See firmware/ directory for source code."),
 }
 
-_current = EN
-# _current = ZH
+# _current = EN
+_current = ZH
 
 def L() -> dict: return _current
 
