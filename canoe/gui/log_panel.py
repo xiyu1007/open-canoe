@@ -20,7 +20,7 @@ class LogPanel(ttk.Frame):
         ttk.Button(hdr, text=L()["clear"], command=self.clear, width=7).pack(side=tk.RIGHT)
 
         tf = ttk.Frame(self); tf.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
-        self._text = tk.Text(tf, height=4, font=FONT_BODY, bg="#f8fafc",
+        self._text = tk.Text(tf, height=4, font=FONT_BODY, bg=TEXT_BG,
                              relief="flat", borderwidth=1, state=tk.DISABLED, wrap=tk.WORD)
         sb = ttk.Scrollbar(tf, command=self._text.yview)
         self._text.configure(yscrollcommand=sb.set)

@@ -16,6 +16,7 @@ class SendPanel(ttk.Frame):
         self._cb_filt = on_filter
         self._cycling = False; self._cycled = 0
         self._enabled = True
+        self._inc_val = 0
         self._build()
 
     def _build(self) -> None:
@@ -48,11 +49,14 @@ class SendPanel(ttk.Frame):
         self._rtr_cb.grid(row=r, column=0, sticky=tk.W, pady=(0, 4)); r += 1
 
         b(L_["dlc"], r); r += 1
+        dlc_row = ttk.Frame(self, style="Card.TFrame"); dlc_row.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
         self._dlc_var = tk.StringVar(value="8")
-        ttk.Combobox(self, textvariable=self._dlc_var,
+        ttk.Combobox(dlc_row, textvariable=self._dlc_var,
                      values=[str(i) for i in range(1, 9)],
-                     state="readonly", font=FONT_BODY).grid(
-            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+                     state="readonly", font=FONT_BODY, width=4).pack(side=tk.LEFT)
+        self._inc_var = tk.BooleanVar(value=False)
+        self._inc_cb = ttk.Checkbutton(dlc_row, text=L_["data_inc"], variable=self._inc_var)
+        self._inc_cb.pack(side=tk.LEFT, padx=(8, 0))
 
         b(L_["data_hex"], r); r += 1
         self._data_var = tk.StringVar(value="00 00 00 00 00 00 00 00")
@@ -119,16 +123,6 @@ class SendPanel(ttk.Frame):
                         value="hide", command=self._apply_msg_filter).pack(side=tk.LEFT, padx=(0, 4))
         ttk.Radiobutton(fm2, text=L_["filter_off"], variable=self._mf_mode,
                         value="off", command=self._apply_msg_filter).pack(side=tk.LEFT)
-
-    def _on_filter_focus_in(self, _e) -> None:
-        if self._f_id_var.get() == L()["filter_id"]:
-            self._f_id_var.set("")
-            self._f_id_entry.config(foreground=PRIMARY)
-
-    def _on_filter_focus_out(self, _e) -> None:
-        if not self._f_id_var.get().strip():
-            self._f_id_var.set(L()["filter_id"])
-            self._f_id_entry.config(foreground=SECONDARY)
 
     def _do_format(self) -> None:
         if not self._dirty: return
@@ -216,13 +210,18 @@ class SendPanel(ttk.Frame):
         self._btn_err.config(state=tk.NORMAL if enabled else tk.DISABLED)
         if not enabled:
             self.stop_cycle()
+            self._inc_cb.config(state=tk.DISABLED)
+        else:
+            self._inc_cb.config(state=tk.NORMAL if not self._rtr_var.get() else tk.DISABLED)
         self._btn_cyc.config(state=tk.NORMAL if enabled else tk.DISABLED)
 
     def _on_rtr_toggle(self) -> None:
         if self._rtr_var.get():
             self._data_entry.config(state=tk.DISABLED, foreground=TAG_MUTED)
+            self._inc_cb.config(state=tk.DISABLED)
         else:
             self._data_entry.config(state=tk.NORMAL, foreground=PRIMARY)
+            self._inc_cb.config(state=tk.NORMAL)
             if self._dirty: self._do_format()
 
     def _send_once(self) -> None:
@@ -271,6 +270,11 @@ class SendPanel(ttk.Frame):
                 if len(hex_str) % 2: hex_str += "0"
                 data = bytes.fromhex(hex_str)
                 data = data[:8].ljust(dlc, b"\x00")[:dlc]
+                if self._inc_var.get() and not is_rtr:
+                    val = int.from_bytes(data, "big") + self._inc_val
+                    val &= (1 << (dlc * 8)) - 1
+                    data = val.to_bytes(dlc, "big")
+                    self._inc_val += 1
             return CANMessage(arbitration_id=can_id, data=data, is_extended=is_ext,
                               is_remote=is_rtr, timestamp_us=int(time.time()*1_000_000))
         except Exception:

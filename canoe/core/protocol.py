@@ -11,7 +11,6 @@ from enum import IntEnum
 
 _STX = 0xAA
 _ETX = 0x55
-_HDR_FMT = struct.Struct("<BBH")  # STX, CMD, LEN
 
 
 class Command(IntEnum):

@@ -36,7 +36,7 @@ class WaveformWindow(tk.Toplevel):
         self._st = ttk.Label(tb, text=L_["wave_idle"], foreground=SECONDARY)
         self._st.grid(row=0, column=7, padx=(10, 0))
 
-        self._cvs = tk.Canvas(self, bg="#f8fafc", highlightthickness=0)
+        self._cvs = tk.Canvas(self, bg=TEXT_BG, highlightthickness=0)
         self._cvs.grid(row=1, column=0, sticky="nsew", padx=10, pady=(4, 10))
         self._cvs.create_text(450, 220, fill=SECONDARY, font=FONT_BODY, justify=tk.CENTER,
             text=L_["w_placeholder"])
@@ -47,12 +47,6 @@ class WaveformWindow(tk.Toplevel):
         self._btn.config(text=L_["wave_pause"] if self._cap else L_["wave_cap"])
         self._st.config(text=L_["wave_capturing"] if self._cap else L_["w_paused"],
                         foreground=SUCCESS if self._cap else SECONDARY)
-
-    def _stop(self) -> None:
-        self._cap = False
-        L_ = L()
-        self._btn.config(text=L_["wave_cap"])
-        self._st.config(text=L_["w_stopped"], foreground=SECONDARY)
 
     def show(self) -> None:
         self.deiconify(); self.lift()

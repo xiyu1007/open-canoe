@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
@@ -36,7 +36,7 @@ uv run python main.py
 
 ## Architecture
 
-- **Tkinter/ttk** — native GUI, "vista" theme, card-based layout (white cards on `#e8ecf1` bg)
+- **Tkinter/ttk** — native GUI, "vista" theme, card-based layout (white cards on `bg` #e8ecf1)
 - **lang.py** — simple EN/ZH dict lookup via `L()["key"]`, no framework overhead
 - **Async connect** — `_connect_async()` spawns thread, results via `queue.Queue` polled at 200ms
 - **Connect toggle** — single button: "连接" when disconnected, "断开" when connected (green)

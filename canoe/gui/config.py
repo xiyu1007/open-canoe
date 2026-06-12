@@ -1,22 +1,23 @@
-"""GUI constants — colors, fonts, layout values.
-
-Tailwind-inspired palette, same approach as the text-encoding-tool reference.
-"""
+"""GUI constants — colors, fonts, layout values."""
 
 from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# Palette (Tailwind-inspired)
-# ---------------------------------------------------------------------------
-BG = "#e8ecf1"           # slate-100 — window background
-CARD = "#ffffff"          # white — card background
-PRIMARY = "#1e293b"       # slate-800 — body text
-SECONDARY = "#64748b"     # slate-500 — hint / secondary text
-ACCENT = "#3b82f6"        # blue-500 — buttons, progress, links
-ACCENT_HOVER = "#2563eb"  # blue-600 — button hover
-SUCCESS = "#16a34a"       # green-600 — ok
-WARNING = "#f59e0b"       # amber-500 — warning
-ERROR = "#ef4444"         # red-500 — error
+__all__ = [
+    "BG", "CARD", "PRIMARY", "SECONDARY", "ACCENT", "SUCCESS", "WARNING", "ERROR",
+    "TAG_STD", "TAG_EXT", "TAG_ERR", "TAG_MUTED", "TEXT_BG",
+    "FONT_UI", "FONT_TITLE", "FONT_SECTION", "FONT_BODY", "FONT_HINT", "FONT_MONO_9",
+    "XPAD", "YPAD", "CARD_PAD", "BITRATES", "MCU_TARGETS",
+]
+
+BG = "#e8ecf1"
+CARD = "#ffffff"
+PRIMARY = "#1e293b"
+SECONDARY = "#64748b"
+ACCENT = "#3b82f6"
+SUCCESS = "#16a34a"
+WARNING = "#f59e0b"
+ERROR = "#ef4444"
+TEXT_BG = "#f8fafc"      # text widget / canvas background
 
 # Message trace tag colors
 TAG_STD = "#1e293b"       # standard CAN ID

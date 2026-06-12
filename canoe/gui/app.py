@@ -8,7 +8,7 @@ import threading, queue, time
 
 from canoe.config.settings import load_settings
 from canoe.core.models import CANMessage
-from canoe.core.transport import auto_detect, TransportError, list_serial_ports
+from canoe.core.transport import auto_detect, TransportError
 from canoe.core.protocol import encode, Command
 
 from canoe.gui.config import *
@@ -321,7 +321,7 @@ class MainWindow:
         ttk.Radiobutton(f, text=L_["flash_info_f407"],
                         variable=mcu, value="STM32F407VET6").pack(anchor=tk.W, pady=(0, 8))
         ttk.Separator(f, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=4)
-        txt = tk.Text(f, height=8, font=FONT_MONO_9, bg="#f8fafc", relief="flat", borderwidth=1)
+        txt = tk.Text(f, height=8, font=FONT_MONO_9, bg=TEXT_BG, relief="flat", borderwidth=1)
         txt.pack(fill=tk.BOTH, expand=True, pady=(4, 8)); txt.insert("1.0", L_["flash_steps"])
         txt.config(state=tk.DISABLED)
         ttk.Button(f, text="OK", command=dlg.destroy).pack(side=tk.RIGHT)

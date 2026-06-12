@@ -10,11 +10,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import structlog
 import yaml
 from pydantic import BaseModel, Field
 
-logger = structlog.get_logger()
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _DEFAULTS_PATH = Path(__file__).resolve().parent / "defaults.yaml"
 
