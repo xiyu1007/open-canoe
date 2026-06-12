@@ -14,6 +14,7 @@ class MessageTable(ttk.Frame):
         super().__init__(parent)
         self._max = max_rows; self._cnt = 0; self._paused = False
         self._stats = BusStatistics()
+        self._filt_ids: set[int] = set(); self._filt_mode = "off"
         self._build()
 
     def _build(self) -> None:
@@ -45,8 +46,13 @@ class MessageTable(ttk.Frame):
         self._tree.tag_configure("ext", foreground=TAG_EXT)
         self._tree.tag_configure("err", foreground=TAG_ERR)
 
+    def set_filter(self, ids: set[int], mode: str) -> None:
+        self._filt_ids = ids; self._filt_mode = mode
+
     def add(self, msg: CANMessage) -> None:
         if self._paused: return
+        if self._filt_mode == "show" and msg.arbitration_id not in self._filt_ids: return
+        if self._filt_mode == "hide" and msg.arbitration_id in self._filt_ids: return
         self._cnt += 1; L_ = L()
         ts = time.strftime("%H:%M:%S") + f".{int(time.time()*1000)%1000:03d}"
         tag = "err" if msg.is_error else ("ext" if msg.is_extended else "std")

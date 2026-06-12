@@ -10,9 +10,10 @@ from canoe.core.models import CANMessage
 
 
 class SendPanel(ttk.Frame):
-    def __init__(self, parent, *, on_send=None):
+    def __init__(self, parent, *, on_send=None, on_filter=None):
         super().__init__(parent, style="Card.TFrame")
         self._cb = on_send
+        self._cb_filt = on_filter
         self._cycling = False; self._cycled = 0
         self._build()
 
@@ -71,17 +72,30 @@ class SendPanel(ttk.Frame):
                                   foreground=SECONDARY, font=FONT_BODY)
         self._cyc_lbl.grid(row=r, column=0, sticky=tk.W); r += 1
 
-        s(L_["presets"], r); r += 1
-        for name, cid, data in [
-            (L_["preset_rpm"],     "0x7DF", "02 01 0C 00 00 00 00 00"),
-            (L_["preset_speed"],   "0x7DF", "02 01 0D 00 00 00 00 00"),
-            (L_["preset_vin"],     "0x7DF", "02 09 02 00 00 00 00 00"),
-            (L_["preset_coolant"], "0x7DF", "02 01 05 00 00 00 00 00"),
-            (L_["preset_tpms"],    "0x601", "03 22 F1 90 00 00 00 00"),
-        ]:
-            ttk.Button(self, text=name,
-                       command=lambda c=cid, d=data: self._preset(c, d)).grid(
-                row=r, column=0, sticky=tk.EW, pady=1); r += 1
+        s(L_["filter"], r); r += 1
+        self._f_id_var = tk.StringVar(value="")
+        ttk.Entry(self, textvariable=self._f_id_var, font=FONT_BODY).grid(
+            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        self._f_id_var.trace_add("write", lambda *_: self._apply_filter())
+
+        fm = ttk.Frame(self); fm.grid(row=r, column=0, sticky=tk.EW); r += 1
+        self._f_mode = tk.StringVar(value="off")
+        ttk.Radiobutton(fm, text=L_["filter_show"], variable=self._f_mode,
+                        value="show", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Radiobutton(fm, text=L_["filter_hide"], variable=self._f_mode,
+                        value="hide", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Radiobutton(fm, text=L_["filter_off"], variable=self._f_mode,
+                        value="off", command=self._apply_filter).pack(side=tk.LEFT)
+
+    def _apply_filter(self) -> None:
+        raw = self._f_id_var.get().strip()
+        mode = self._f_mode.get()
+        ids: set[int] = set()
+        if raw and mode != "off":
+            for p in raw.replace(",", " ").split():
+                try: ids.add(int(p.replace("0x","").replace("0X",""), 16))
+                except ValueError: pass
+        if self._cb_filt: self._cb_filt(ids, mode)
 
     def _send_once(self) -> None:
         m = self._parse();
@@ -115,15 +129,12 @@ class SendPanel(ttk.Frame):
 
     def _parse(self) -> CANMessage | None:
         try:
-            can_id = int(self._id_var.get().lower().replace("0x", ""), 16)
+            can_id = int(self._id_var.get().lower().replace("0x",""), 16)
             is_ext = "扩展" in self._tp_var.get() or "Extended" in self._tp_var.get()
             dlc = int(self._dlc_var.get())
-            data = bytes.fromhex(self._data_var.get().replace(" ", ""))
+            data = bytes.fromhex(self._data_var.get().replace(" ",""))
             data = data[:8].ljust(dlc, b"\x00")[:dlc]
             return CANMessage(arbitration_id=can_id, data=data, is_extended=is_ext,
-                              timestamp_us=int(time.time() * 1_000_000))
+                              timestamp_us=int(time.time()*1_000_000))
         except Exception:
             return None
-
-    def _preset(self, cid: str, data: str) -> None:
-        self._id_var.set(cid); self._data_var.set(data)

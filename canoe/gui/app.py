@@ -112,7 +112,7 @@ class MainWindow:
         self._frame_right = ttk.Frame(self._main)
         self._card_right = ttk.Frame(self._frame_right, style="Card.TFrame", padding=14)
         self._card_right.pack(fill=tk.BOTH, expand=True)
-        self._snd = SendPanel(self._card_right, on_send=self._on_send)
+        self._snd = SendPanel(self._card_right, on_send=self._on_send, on_filter=self._on_filter)
         self._snd.pack(fill=tk.BOTH, expand=True)
 
         # 日志
@@ -139,19 +139,18 @@ class MainWindow:
         for w in (self._frame_left, self._frame_ctr, self._frame_right):
             w.grid_forget()
 
-        col = 0
         if self._v_left.get():
-            self._frame_left.grid(row=0, column=col, sticky="nsew", padx=(0, 6)); col += 1
-        self._frame_ctr.grid(row=0, column=col, sticky="nsew",
-                             padx=(0, 6) if self._v_right.get() else 0); col += 1
+            self._frame_left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
+        self._frame_ctr.grid(row=0, column=1, sticky="nsew")
         if self._v_right.get():
-            self._frame_right.grid(row=0, column=col, sticky="nsew", padx=(6, 0))
+            self._frame_right.grid(row=0, column=2, sticky="ns", padx=(6, 0))
 
         if self._v_detail.get():
-            self._card_trace.grid(row=0, column=0, sticky="nsew", pady=(0, 4))
-            self._frame_det.grid(row=1, column=0, sticky="nsew", pady=(4, 0))
+            self._card_trace.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
+            self._frame_det.pack(fill=tk.X, pady=(4, 0))
         else:
-            self._card_trace.grid(row=0, column=0, sticky="nsew")
+            self._card_trace.pack(fill=tk.BOTH, expand=True)
+            self._frame_det.pack_forget()
 
         if self._v_log.get():
             self._frame_log.pack(fill=tk.X, pady=(8, 0))
@@ -241,6 +240,9 @@ class MainWindow:
         except queue.Empty:
             pass
         self.root.after(200, self._poll)
+
+    def _on_filter(self, ids: set[int], mode: str) -> None:
+        self._tbl.set_filter(ids, mode)
 
     def _on_send(self, msg: CANMessage) -> None:
         self._tbl.add(msg)

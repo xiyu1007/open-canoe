@@ -74,10 +74,6 @@ class DeviceBar(ttk.Frame):
         ttk.Button(self, text=L_["flash_fw"], command=self._cb_flash).grid(
             row=r, column=0, sticky=tk.EW, pady=(0, 8)); r += 1
 
-        sec(L_["filter"], r); r += 1
-        ttk.Label(self, text=L_["no_filter"], foreground=SECONDARY, font=FONT_BODY).grid(
-            row=r, column=0, sticky=tk.W)
-
     def _scan(self) -> list[str]:
         from canoe.core.transport import list_serial_ports
         return [p.port for p in list_serial_ports()]
