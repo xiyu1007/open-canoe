@@ -45,6 +45,7 @@ class MessageTable(ttk.Frame):
         self._tree.tag_configure("std", foreground=TAG_STD)
         self._tree.tag_configure("ext", foreground=TAG_EXT)
         self._tree.tag_configure("err", foreground=TAG_ERR)
+        self._tree.bind("<Control-c>", self._copy)
 
     def set_filter(self, ids: set[int], mode: str) -> None:
         self._filt_ids = ids; self._filt_mode = mode
@@ -78,6 +79,16 @@ class MessageTable(ttk.Frame):
         self._paused = not self._paused
         L_ = L()
         self._btn_pause.config(text=L_["resume"] if self._paused else L_["pause"])
+
+    def _copy(self, _event) -> None:
+        sel = self._tree.selection()
+        if not sel: return
+        lines = []
+        for item in sel:
+            vals = self._tree.item(item, "values")
+            lines.append("\t".join(str(v) for v in vals))
+        self.clipboard_clear()
+        self.clipboard_append("\n".join(lines))
 
     def _prune(self) -> None:
         kids = self._tree.get_children()

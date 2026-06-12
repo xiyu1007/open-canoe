@@ -75,12 +75,16 @@ class MainWindow:
         tf.pack(fill=tk.X, pady=(0, 8))
         ttk.Label(tf, text=L_["title"], style="Title.TLabel").pack(side=tk.LEFT)
 
-        # 可拖动主区域
-        self._pane = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
-        self._pane.pack(fill=tk.BOTH, expand=True)
+        # 竖向主分割（上方三栏 + 下方日志）
+        self._v_pane = ttk.PanedWindow(outer, orient=tk.VERTICAL)
+        self._v_pane.pack(fill=tk.BOTH, expand=True)
+
+        # 横向三栏
+        self._h_pane = ttk.PanedWindow(self._v_pane, orient=tk.HORIZONTAL)
+        self._v_pane.add(self._h_pane, weight=1)
 
         # 左栏
-        self._frame_left = ttk.Frame(self._pane)
+        self._frame_left = ttk.Frame(self._h_pane)
         self._card_left = ttk.Frame(self._frame_left, style="Card.TFrame", padding=14)
         self._card_left.pack(fill=tk.BOTH, expand=True)
         self._dev = DeviceBar(
@@ -91,38 +95,41 @@ class MainWindow:
             on_flash=self._flash_dialog,
         )
         self._dev.pack(fill=tk.BOTH, expand=True)
-        self._pane.add(self._frame_left, weight=0)
+        self._h_pane.add(self._frame_left, weight=0)
 
-        # 中栏
-        self._frame_ctr = ttk.Frame(self._pane)
-        self._frame_ctr.rowconfigure(0, weight=1)
+        # 中栏 — 竖向分割（追踪 + 详情）
+        self._ctr_pane = ttk.PanedWindow(self._h_pane, orient=tk.VERTICAL)
 
-        self._card_trace = ttk.Frame(self._frame_ctr, style="Card.TFrame", padding=14)
+        self._frame_trace = ttk.Frame(self._ctr_pane)
+        self._card_trace = ttk.Frame(self._frame_trace, style="Card.TFrame", padding=14)
+        self._card_trace.pack(fill=tk.BOTH, expand=True)
         self._card_trace.rowconfigure(0, weight=1); self._card_trace.columnconfigure(0, weight=1)
         self._tbl = MessageTable(self._card_trace, max_rows=self.settings.ui.max_log_lines)
         self._tbl.pack(fill=tk.BOTH, expand=True)
+        self._ctr_pane.add(self._frame_trace, weight=1)
 
-        self._frame_det = ttk.Frame(self._frame_ctr)
+        self._frame_det = ttk.Frame(self._ctr_pane)
         self._card_det = ttk.Frame(self._frame_det, style="Card.TFrame", padding=14)
         self._card_det.pack(fill=tk.BOTH, expand=True)
         self._det = DetailPanel(self._card_det)
         self._det.pack(fill=tk.BOTH, expand=True)
-        self._pane.add(self._frame_ctr, weight=1)
+
+        self._h_pane.add(self._ctr_pane, weight=1)
 
         # 右栏
-        self._frame_right = ttk.Frame(self._pane)
+        self._frame_right = ttk.Frame(self._h_pane)
         self._card_right = ttk.Frame(self._frame_right, style="Card.TFrame", padding=14)
         self._card_right.pack(fill=tk.BOTH, expand=True)
         self._snd = SendPanel(self._card_right, on_send=self._on_send, on_filter=self._on_filter)
         self._snd.pack(fill=tk.BOTH, expand=True)
-        self._pane.add(self._frame_right, weight=0)
+        self._h_pane.add(self._frame_right, weight=0)
 
         # 日志
-        self._frame_log = ttk.Frame(outer)
+        self._frame_log = ttk.Frame(self._v_pane)
         self._card_log = ttk.Frame(self._frame_log, style="Card.TFrame", padding=14)
-        self._card_log.pack(fill=tk.X)
+        self._card_log.pack(fill=tk.BOTH, expand=True)
         self._log = LogPanel(self._card_log)
-        self._log.pack(fill=tk.X)
+        self._log.pack(fill=tk.BOTH, expand=True)
 
         # 状态栏
         sf = ttk.Frame(outer)
@@ -138,27 +145,28 @@ class MainWindow:
         self._relayout()
 
     def _relayout(self) -> None:
-        # 清空 pane
-        for w in self._pane.panes():
-            self._pane.forget(w)
-
+        # 横向 pane: 左中右
+        for w in self._h_pane.panes():
+            self._h_pane.forget(w)
         if self._v_left.get():
-            self._pane.add(self._frame_left, weight=0)
-        self._pane.add(self._frame_ctr, weight=1)
+            self._h_pane.add(self._frame_left, weight=0)
+        self._h_pane.add(self._ctr_pane, weight=1)
         if self._v_right.get():
-            self._pane.add(self._frame_right, weight=0)
+            self._h_pane.add(self._frame_right, weight=0)
 
+        # 中栏内部: 追踪 + 详情
+        for w in self._ctr_pane.panes():
+            self._ctr_pane.forget(w)
+        self._ctr_pane.add(self._frame_trace, weight=1)
         if self._v_detail.get():
-            self._card_trace.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
-            self._frame_det.pack(fill=tk.X, pady=(4, 0))
-        else:
-            self._card_trace.pack(fill=tk.BOTH, expand=True)
-            self._frame_det.pack_forget()
+            self._ctr_pane.add(self._frame_det, weight=0)
 
+        # 竖向 pane: 横向栏 + 日志
+        for w in self._v_pane.panes():
+            self._v_pane.forget(w)
+        self._v_pane.add(self._h_pane, weight=1)
         if self._v_log.get():
-            self._frame_log.pack(fill=tk.X, pady=(8, 0))
-        else:
-            self._frame_log.pack_forget()
+            self._v_pane.add(self._frame_log, weight=0)
 
     def _build_menu(self) -> None:
         L_ = L()

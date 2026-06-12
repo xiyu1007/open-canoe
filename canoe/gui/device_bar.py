@@ -50,11 +50,12 @@ class DeviceBar(ttk.Frame):
         ttk.Button(pf, text="⟳", width=3, command=self._refresh_ports).grid(row=0, column=1, padx=(4, 0))
 
         sec(L_["connection"], r); r += 1
-        self._status_lbl = ttk.Label(self, text=L_["disconnected"],
-                                     foreground=SECONDARY, font=FONT_BODY)
-        self._status_lbl.grid(row=r, column=0, sticky=tk.W); r += 1
-        self._btn = ttk.Button(self, text=L_["connect"], command=self._toggle)
-        self._btn.grid(row=r, column=0, sticky=tk.EW, pady=(4, 8)); r += 1
+        row = ttk.Frame(self); row.grid(row=r, column=0, sticky=tk.EW, pady=(4, 8)); r += 1
+        self._dot = tk.Canvas(row, width=12, height=12, highlightthickness=0, bg=CARD)
+        self._dot.pack(side=tk.LEFT, padx=(0, 6))
+        self._dot.create_oval(2, 2, 10, 10, fill=SECONDARY, outline="")
+        self._btn = ttk.Button(row, text=L_["connect"], command=self._toggle)
+        self._btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         sec(L_["can_settings"], r); r += 1
         sub(L_["bitrate"], r); r += 1
@@ -94,17 +95,17 @@ class DeviceBar(ttk.Frame):
 
     def set_connecting(self) -> None:
         self._connected = False; L_ = L()
-        self._status_lbl.config(text=L_["connecting"], foreground=WARNING)
-        self._btn.config(state=tk.DISABLED)
+        self._dot.delete("all"); self._dot.create_oval(2, 2, 10, 10, fill=WARNING, outline="")
+        self._btn.config(text=L_["connecting"], state=tk.DISABLED)
 
     def set_connected(self, port: str = "") -> None:
         self._connected = True; L_ = L()
-        self._status_lbl.config(text=f"{L_['connected']} — {port}", foreground=SUCCESS)
+        self._dot.delete("all"); self._dot.create_oval(2, 2, 10, 10, fill=SUCCESS, outline="")
         self._btn.config(text=L_["disconnect"], state=tk.NORMAL)
 
     def set_disconnected(self) -> None:
         self._connected = False; L_ = L()
-        self._status_lbl.config(text=L_["disconnected"], foreground=SECONDARY)
+        self._dot.delete("all"); self._dot.create_oval(2, 2, 10, 10, fill=SECONDARY, outline="")
         self._btn.config(text=L_["connect"], state=tk.NORMAL)
 
     def _toggle(self) -> None:

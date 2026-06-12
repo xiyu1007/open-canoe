@@ -51,8 +51,9 @@ class SendPanel(ttk.Frame):
 
         b(L_["data_hex"], r); r += 1
         self._data_var = tk.StringVar(value="02 01 00 00 00 00 00 00")
-        ttk.Entry(self, textvariable=self._data_var, font=FONT_BODY).grid(
-            row=r, column=0, sticky=tk.EW, pady=(0, 8)); r += 1
+        self._data_entry = ttk.Entry(self, textvariable=self._data_var, font=FONT_BODY)
+        self._data_entry.grid(row=r, column=0, sticky=tk.EW, pady=(0, 8)); r += 1
+        self._data_var.trace_add("write", self._on_data_change)
 
         ttk.Button(self, text=L_["send_once"], command=self._send_once).grid(
             row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
@@ -62,8 +63,9 @@ class SendPanel(ttk.Frame):
         s(L_["cycle"], r); r += 1
         b(L_["interval"], r); r += 1
         self._ivl_var = tk.StringVar(value="100")
-        ttk.Entry(self, textvariable=self._ivl_var, font=FONT_BODY, width=8).grid(
-            row=r, column=0, sticky=tk.W, pady=(0, 4)); r += 1
+        row = ttk.Frame(self); row.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        ttk.Entry(row, textvariable=self._ivl_var, font=FONT_BODY, width=8).pack(side=tk.LEFT)
+        ttk.Label(row, text="ms", font=FONT_BODY).pack(side=tk.LEFT, padx=(4, 0))
         self._btn_cyc = ttk.Button(self, text=L_["start_cycle"], command=self._toggle_cycle)
         self._btn_cyc.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
         self._cyc_lbl = ttk.Label(self, text=f"{L_['sent']} 0",
@@ -98,6 +100,14 @@ class SendPanel(ttk.Frame):
         if not self._f_id_var.get().strip():
             self._f_id_var.set(L()["filter_id"])
             self._f_id_entry.config(foreground=SECONDARY)
+
+    def _on_data_change(self, *_args) -> None:
+        raw = self._data_var.get().replace(" ", "").upper()
+        spaced = " ".join(raw[i:i+2] for i in range(0, len(raw), 2))
+        if self._data_var.get() != spaced:
+            pos = self._data_entry.index(tk.INSERT)
+            self._data_var.set(spaced)
+            self._data_entry.icursor(min(pos + (pos // 2), len(spaced)))
 
     def _apply_filter(self) -> None:
         raw = self._f_id_var.get().strip()
