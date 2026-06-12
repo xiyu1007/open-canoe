@@ -91,6 +91,25 @@ class SendPanel(ttk.Frame):
         ttk.Radiobutton(fm, text=L_["filter_off"], variable=self._f_mode,
                         value="off", command=self._apply_filter).pack(side=tk.LEFT)
 
+        s(L_["msg_filter"], r); r += 1
+        self._mf_id_var = tk.StringVar(value="")
+        self._mf_id_entry = ttk.Entry(self, textvariable=self._mf_id_var, font=FONT_BODY,
+                                      foreground=SECONDARY)
+        self._mf_id_entry.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        self._mf_id_entry.insert(0, L_["msg_filter_id"])
+        self._mf_id_entry.bind("<FocusIn>", self._on_msg_focus_in)
+        self._mf_id_entry.bind("<FocusOut>", self._on_msg_focus_out)
+        self._mf_id_var.trace_add("write", lambda *_: self._apply_msg_filter())
+
+        fm2 = ttk.Frame(self); fm2.grid(row=r, column=0, sticky=tk.EW); r += 1
+        self._mf_mode = tk.StringVar(value="off")
+        ttk.Radiobutton(fm2, text=L_["filter_show"], variable=self._mf_mode,
+                        value="show", command=self._apply_msg_filter).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Radiobutton(fm2, text=L_["filter_hide"], variable=self._mf_mode,
+                        value="hide", command=self._apply_msg_filter).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Radiobutton(fm2, text=L_["filter_off"], variable=self._mf_mode,
+                        value="off", command=self._apply_msg_filter).pack(side=tk.LEFT)
+
     def _on_filter_focus_in(self, _e) -> None:
         if self._f_id_var.get() == L()["filter_id"]:
             self._f_id_var.set("")
@@ -113,12 +132,43 @@ class SendPanel(ttk.Frame):
         raw = self._f_id_var.get().strip()
         if raw == L()["filter_id"]: raw = ""
         mode = self._f_mode.get()
+        ids = self._parse_ids(raw)
+        if self._cb_filt: self._cb_filt("display", ids, mode)
+
+    def _apply_msg_filter(self) -> None:
+        raw = self._mf_id_var.get().strip()
+        if raw == L()["msg_filter_id"]: raw = ""
+        mode = self._mf_mode.get()
+        ids = self._parse_ids(raw)
+        if self._cb_filt: self._cb_filt("msg", ids, mode)
+
+    def _parse_ids(self, raw: str) -> set[int]:
         ids: set[int] = set()
-        if raw and mode != "off":
+        if raw:
             for p in raw.replace(",", " ").split():
                 try: ids.add(int(p.replace("0x","").replace("0X",""), 16))
                 except ValueError: pass
-        if self._cb_filt: self._cb_filt(ids, mode)
+        return ids
+
+    def _on_filter_focus_in(self, _e) -> None:
+        if self._f_id_var.get() == L()["filter_id"]:
+            self._f_id_var.set("")
+            self._f_id_entry.config(foreground=PRIMARY)
+
+    def _on_filter_focus_out(self, _e) -> None:
+        if not self._f_id_var.get().strip():
+            self._f_id_var.set(L()["filter_id"])
+            self._f_id_entry.config(foreground=SECONDARY)
+
+    def _on_msg_focus_in(self, _e) -> None:
+        if self._mf_id_var.get() == L()["msg_filter_id"]:
+            self._mf_id_var.set("")
+            self._mf_id_entry.config(foreground=PRIMARY)
+
+    def _on_msg_focus_out(self, _e) -> None:
+        if not self._mf_id_var.get().strip():
+            self._mf_id_var.set(L()["msg_filter_id"])
+            self._mf_id_entry.config(foreground=SECONDARY)
 
     def _send_once(self) -> None:
         m = self._parse();

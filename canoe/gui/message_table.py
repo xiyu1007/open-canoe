@@ -14,7 +14,8 @@ class MessageTable(ttk.Frame):
         super().__init__(parent)
         self._max = max_rows; self._cnt = 0; self._paused = False
         self._stats = BusStatistics()
-        self._filt_ids: set[int] = set(); self._filt_mode = "off"
+        self._f_disp: set[int] = set(); self._f_disp_mode = "off"
+        self._f_msg: set[int] = set(); self._f_msg_mode = "off"
         self._build()
 
     def _build(self) -> None:
@@ -47,13 +48,20 @@ class MessageTable(ttk.Frame):
         self._tree.tag_configure("err", foreground=TAG_ERR)
         self._tree.bind("<Control-c>", self._copy)
 
-    def set_filter(self, ids: set[int], mode: str) -> None:
-        self._filt_ids = ids; self._filt_mode = mode
+    def set_filter(self, ftype: str, ids: set[int], mode: str) -> None:
+        if ftype == "display":
+            self._f_disp = ids; self._f_disp_mode = mode
+        else:
+            self._f_msg = ids; self._f_msg_mode = mode
 
     def add(self, msg: CANMessage) -> None:
         if self._paused: return
-        if self._filt_mode == "show" and msg.arbitration_id not in self._filt_ids: return
-        if self._filt_mode == "hide" and msg.arbitration_id in self._filt_ids: return
+        # 报文过滤（阻止加入追踪）
+        if self._f_msg_mode == "show" and msg.arbitration_id not in self._f_msg: return
+        if self._f_msg_mode == "hide" and msg.arbitration_id in self._f_msg: return
+        # 显示过滤（控制在追踪中显示）
+        if self._f_disp_mode == "show" and msg.arbitration_id not in self._f_disp: return
+        if self._f_disp_mode == "hide" and msg.arbitration_id in self._f_disp: return
         self._cnt += 1; L_ = L()
         ts = time.strftime("%H:%M:%S") + f".{int(time.time()*1000)%1000:03d}"
         tag = "err" if msg.is_error else ("ext" if msg.is_extended else "std")

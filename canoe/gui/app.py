@@ -255,8 +255,8 @@ class MainWindow:
             pass
         self.root.after(200, self._poll)
 
-    def _on_filter(self, ids: set[int], mode: str) -> None:
-        self._tbl.set_filter(ids, mode)
+    def _on_filter(self, ftype: str, ids: set[int], mode: str) -> None:
+        self._tbl.set_filter(ftype, ids, mode)
 
     def _on_send(self, msg: CANMessage) -> None:
         self._tbl.add(msg)
