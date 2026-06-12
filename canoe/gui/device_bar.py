@@ -24,11 +24,11 @@ class DeviceBar(ttk.Frame):
         self.columnconfigure(0, weight=1)
 
         def sec(text, row, pady=(10, 4)):
-            ttk.Label(self, text=text, font=FONT_SECTION, foreground=PRIMARY).grid(
+            ttk.Label(self, text=text, style="Card.TLabel", font=FONT_SECTION, foreground=PRIMARY).grid(
                 row=row, column=0, sticky=tk.W, pady=pady)
 
         def sub(text, row, pady=(0, 2)):
-            ttk.Label(self, text=text, font=FONT_BODY, foreground=SECONDARY).grid(
+            ttk.Label(self, text=text, style="Card.TLabel", font=FONT_BODY, foreground=SECONDARY).grid(
                 row=row, column=0, sticky=tk.W, pady=pady)
 
         r = 0

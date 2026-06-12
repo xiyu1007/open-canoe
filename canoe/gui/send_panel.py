@@ -22,10 +22,10 @@ class SendPanel(ttk.Frame):
         self.columnconfigure(0, weight=1)
 
         def s(text, row, pady=(12, 4)):
-            ttk.Label(self, text=text, font=FONT_SECTION, foreground=PRIMARY).grid(
+            ttk.Label(self, text=text, style="Card.TLabel", font=FONT_SECTION, foreground=PRIMARY).grid(
                 row=row, column=0, sticky=tk.W, pady=pady)
         def b(text, row, pady=(0, 2)):
-            ttk.Label(self, text=text, font=FONT_BODY, foreground=SECONDARY).grid(
+            ttk.Label(self, text=text, style="Card.TLabel", font=FONT_BODY, foreground=SECONDARY).grid(
                 row=row, column=0, sticky=tk.W, pady=pady)
 
         r = 0
@@ -63,13 +63,13 @@ class SendPanel(ttk.Frame):
         s(L_["cycle"], r); r += 1
         self._ivl_var = tk.StringVar(value="100")
         row = ttk.Frame(self, style="Card.TFrame"); row.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
-        ttk.Label(row, text=L_["interval"], font=FONT_BODY).pack(side=tk.LEFT)
+        ttk.Label(row, text=L_["interval"], style="Card.TLabel").pack(side=tk.LEFT)
         ttk.Entry(row, textvariable=self._ivl_var, font=FONT_BODY, width=6).pack(side=tk.LEFT, padx=(4, 0))
-        ttk.Label(row, text="ms", font=FONT_BODY).pack(side=tk.LEFT, padx=(2, 0))
+        ttk.Label(row, text="ms", style="Card.TLabel").pack(side=tk.LEFT, padx=(2, 0))
         self._btn_cyc = ttk.Button(self, text=L_["start_cycle"], command=self._toggle_cycle)
         self._btn_cyc.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
         self._cyc_lbl = ttk.Label(self, text=f"{L_['sent']} 0",
-                                  foreground=SECONDARY, font=FONT_BODY)
+                                  style="Card.TLabel", foreground=SECONDARY)
         self._cyc_lbl.grid(row=r, column=0, sticky=tk.W); r += 1
 
         s(L_["filter"], r); r += 1
