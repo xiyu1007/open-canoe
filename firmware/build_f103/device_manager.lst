@@ -1,0 +1,1534 @@
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 1
+
+
+   1              		.cpu cortex-m3
+   2              		.arch armv7-m
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.file	"device_manager.c"
+  14              		.text
+  15              	.Ltext0:
+  16              		.cfi_sections	.debug_frame
+  17              		.section	.text.device_tick_ms,"ax",%progbits
+  18              		.align	1
+  19              		.global	device_tick_ms
+  20              		.syntax unified
+  21              		.thumb
+  22              		.thumb_func
+  24              	device_tick_ms:
+  25              	.LFB65:
+  26              		.file 1 "src/device_manager.c"
+   1:src/device_manager.c **** /**
+   2:src/device_manager.c ****  * @file    device_manager.c
+   3:src/device_manager.c ****  * @brief   Device information, capabilities, and uptime management.
+   4:src/device_manager.c ****  *          Uses device config macros — no MCU-specific register access.
+   5:src/device_manager.c ****  */
+   6:src/device_manager.c **** 
+   7:src/device_manager.c **** #include "device_api.h"
+   8:src/device_manager.c **** #include "device_config.h"
+   9:src/device_manager.c **** #include "protocol.h"
+  10:src/device_manager.c **** #include <string.h>
+  11:src/device_manager.c **** 
+  12:src/device_manager.c **** /* Include STM32 HAL for unique ID access */
+  13:src/device_manager.c **** #if defined(STM32F103xB)
+  14:src/device_manager.c **** #include "stm32f1xx_hal.h"
+  15:src/device_manager.c **** #elif defined(STM32F407xx)
+  16:src/device_manager.c **** #include "stm32f4xx_hal.h"
+  17:src/device_manager.c **** #endif
+  18:src/device_manager.c **** 
+  19:src/device_manager.c **** /*============================================================================
+  20:src/device_manager.c ****  * Version Definition
+  21:src/device_manager.c ****  *============================================================================*/
+  22:src/device_manager.c **** #define FW_VERSION_MAJOR    1
+  23:src/device_manager.c **** #define FW_VERSION_MINOR    0
+  24:src/device_manager.c **** #define FW_VERSION_PATCH    0
+  25:src/device_manager.c **** #define FW_DESCRIPTION      "Open-Canoe CAN Analyzer"
+  26:src/device_manager.c **** 
+  27:src/device_manager.c **** /*============================================================================
+  28:src/device_manager.c ****  * Microsecond Timer
+  29:src/device_manager.c ****  *
+  30:src/device_manager.c ****  * We use the TIMESTAMP_TIMER (TIM2) as a free-running 32-bit counter at
+  31:src/device_manager.c ****  * TIMESTAMP_TIMER_CLK_HZ (1 MHz) for microsecond-resolution timestamps.
+  32:src/device_manager.c ****  *============================================================================*/
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 2
+
+
+  33:src/device_manager.c **** 
+  34:src/device_manager.c **** static volatile uint32_t g_uptime_ms = 0;
+  35:src/device_manager.c **** 
+  36:src/device_manager.c **** /* Called from SysTick ISR (1ms interval) */
+  37:src/device_manager.c **** void device_tick_ms(void)
+  38:src/device_manager.c **** {
+  27              		.loc 1 38 1 view -0
+  28              		.cfi_startproc
+  29              		@ args = 0, pretend = 0, frame = 0
+  30              		@ frame_needed = 0, uses_anonymous_args = 0
+  31              		@ link register save eliminated.
+  39:src/device_manager.c ****     g_uptime_ms++;
+  32              		.loc 1 39 5 view .LVU1
+  33              		.loc 1 39 16 is_stmt 0 view .LVU2
+  34 0000 024A     		ldr	r2, .L2
+  35 0002 1368     		ldr	r3, [r2]
+  36 0004 0133     		adds	r3, r3, #1
+  37 0006 1360     		str	r3, [r2]
+  40:src/device_manager.c **** }
+  38              		.loc 1 40 1 view .LVU3
+  39 0008 7047     		bx	lr
+  40              	.L3:
+  41 000a 00BF     		.align	2
+  42              	.L2:
+  43 000c 00000000 		.word	.LANCHOR0
+  44              		.cfi_endproc
+  45              	.LFE65:
+  47              		.section	.rodata.device_get_mcu_model.str1.4,"aMS",%progbits,1
+  48              		.align	2
+  49              	.LC0:
+  50 0000 53544D33 		.ascii	"STM32F103C8T6\000"
+  50      32463130 
+  50      33433854 
+  50      3600
+  51              		.section	.text.device_get_mcu_model,"ax",%progbits
+  52              		.align	1
+  53              		.global	device_get_mcu_model
+  54              		.syntax unified
+  55              		.thumb
+  56              		.thumb_func
+  58              	device_get_mcu_model:
+  59              	.LFB66:
+  41:src/device_manager.c **** 
+  42:src/device_manager.c **** /*============================================================================
+  43:src/device_manager.c ****  * Public API Implementation
+  44:src/device_manager.c ****  *============================================================================*/
+  45:src/device_manager.c **** 
+  46:src/device_manager.c **** const char *device_get_mcu_model(void)
+  47:src/device_manager.c **** {
+  60              		.loc 1 47 1 is_stmt 1 view -0
+  61              		.cfi_startproc
+  62              		@ args = 0, pretend = 0, frame = 0
+  63              		@ frame_needed = 0, uses_anonymous_args = 0
+  64              		@ link register save eliminated.
+  48:src/device_manager.c ****     return MCU_MODEL_STRING;
+  65              		.loc 1 48 5 view .LVU5
+  49:src/device_manager.c **** }
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 3
+
+
+  66              		.loc 1 49 1 is_stmt 0 view .LVU6
+  67 0000 0048     		ldr	r0, .L5
+  68 0002 7047     		bx	lr
+  69              	.L6:
+  70              		.align	2
+  71              	.L5:
+  72 0004 00000000 		.word	.LC0
+  73              		.cfi_endproc
+  74              	.LFE66:
+  76              		.section	.text.device_get_fw_version,"ax",%progbits
+  77              		.align	1
+  78              		.global	device_get_fw_version
+  79              		.syntax unified
+  80              		.thumb
+  81              		.thumb_func
+  83              	device_get_fw_version:
+  84              	.LVL0:
+  85              	.LFB67:
+  50:src/device_manager.c **** 
+  51:src/device_manager.c **** void device_get_fw_version(uint8_t *major, uint8_t *minor, uint8_t *patch)
+  52:src/device_manager.c **** {
+  86              		.loc 1 52 1 is_stmt 1 view -0
+  87              		.cfi_startproc
+  88              		@ args = 0, pretend = 0, frame = 0
+  89              		@ frame_needed = 0, uses_anonymous_args = 0
+  90              		@ link register save eliminated.
+  53:src/device_manager.c ****     if (major) *major = FW_VERSION_MAJOR;
+  91              		.loc 1 53 5 view .LVU8
+  92              		.loc 1 53 8 is_stmt 0 view .LVU9
+  93 0000 0346     		mov	r3, r0
+  94 0002 08B1     		cbz	r0, .L8
+  95              		.loc 1 53 16 is_stmt 1 discriminator 1 view .LVU10
+  96              		.loc 1 53 23 is_stmt 0 discriminator 1 view .LVU11
+  97 0004 0120     		movs	r0, #1
+  98              	.LVL1:
+  99              		.loc 1 53 23 discriminator 1 view .LVU12
+ 100 0006 1870     		strb	r0, [r3]
+ 101              	.L8:
+  54:src/device_manager.c ****     if (minor) *minor = FW_VERSION_MINOR;
+ 102              		.loc 1 54 5 is_stmt 1 view .LVU13
+ 103              		.loc 1 54 8 is_stmt 0 view .LVU14
+ 104 0008 09B1     		cbz	r1, .L9
+ 105              		.loc 1 54 16 is_stmt 1 discriminator 1 view .LVU15
+ 106              		.loc 1 54 23 is_stmt 0 discriminator 1 view .LVU16
+ 107 000a 0023     		movs	r3, #0
+ 108              	.LVL2:
+ 109              		.loc 1 54 23 discriminator 1 view .LVU17
+ 110 000c 0B70     		strb	r3, [r1]
+ 111              	.L9:
+  55:src/device_manager.c ****     if (patch) *patch = FW_VERSION_PATCH;
+ 112              		.loc 1 55 5 is_stmt 1 view .LVU18
+ 113              		.loc 1 55 8 is_stmt 0 view .LVU19
+ 114 000e 0AB1     		cbz	r2, .L7
+ 115              		.loc 1 55 16 is_stmt 1 discriminator 1 view .LVU20
+ 116              		.loc 1 55 23 is_stmt 0 discriminator 1 view .LVU21
+ 117 0010 0023     		movs	r3, #0
+ 118 0012 1370     		strb	r3, [r2]
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 4
+
+
+ 119              	.L7:
+  56:src/device_manager.c **** }
+ 120              		.loc 1 56 1 view .LVU22
+ 121 0014 7047     		bx	lr
+ 122              		.cfi_endproc
+ 123              	.LFE67:
+ 125              		.section	.text.device_get_serial,"ax",%progbits
+ 126              		.align	1
+ 127              		.global	device_get_serial
+ 128              		.syntax unified
+ 129              		.thumb
+ 130              		.thumb_func
+ 132              	device_get_serial:
+ 133              	.LFB68:
+  57:src/device_manager.c **** 
+  58:src/device_manager.c **** uint32_t device_get_serial(void)
+  59:src/device_manager.c **** {
+ 134              		.loc 1 59 1 is_stmt 1 view -0
+ 135              		.cfi_startproc
+ 136              		@ args = 0, pretend = 0, frame = 0
+ 137              		@ frame_needed = 0, uses_anonymous_args = 0
+ 138              		@ link register save eliminated.
+  60:src/device_manager.c ****     /* STM32 unique ID: 96 bits at base address 0x1FFFF7E8 (F1) or 0x1FFF7A10 (F4) */
+  61:src/device_manager.c **** #if defined(STM32F103xB)
+  62:src/device_manager.c ****     uint32_t *uid = (uint32_t *)0x1FFFF7E8;
+ 139              		.loc 1 62 5 view .LVU24
+ 140              	.LVL3:
+  63:src/device_manager.c **** #elif defined(STM32F407xx)
+  64:src/device_manager.c ****     uint32_t *uid = (uint32_t *)0x1FFF7A10;
+  65:src/device_manager.c **** #else
+  66:src/device_manager.c ****     uint32_t uid[3] = {0, 0, 0};
+  67:src/device_manager.c **** #endif
+  68:src/device_manager.c ****     /* Simple XOR hash of the 96-bit UID to produce a 32-bit serial */
+  69:src/device_manager.c ****     return uid[0] ^ uid[1] ^ uid[2];
+ 141              		.loc 1 69 5 view .LVU25
+ 142              		.loc 1 69 15 is_stmt 0 view .LVU26
+ 143 0000 044B     		ldr	r3, .L12
+ 144 0002 D3F8E807 		ldr	r0, [r3, #2024]
+ 145              		.loc 1 69 24 view .LVU27
+ 146 0006 D3F8EC27 		ldr	r2, [r3, #2028]
+ 147              		.loc 1 69 19 view .LVU28
+ 148 000a 5040     		eors	r0, r0, r2
+ 149              		.loc 1 69 33 view .LVU29
+ 150 000c D3F8F037 		ldr	r3, [r3, #2032]
+  70:src/device_manager.c **** }
+ 151              		.loc 1 70 1 view .LVU30
+ 152 0010 5840     		eors	r0, r0, r3
+ 153 0012 7047     		bx	lr
+ 154              	.L13:
+ 155              		.align	2
+ 156              	.L12:
+ 157 0014 00F0FF1F 		.word	536866816
+ 158              		.cfi_endproc
+ 159              	.LFE68:
+ 161              		.section	.rodata.device_get_info.str1.4,"aMS",%progbits,1
+ 162              		.align	2
+ 163              	.LC1:
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 5
+
+
+ 164 0000 4F70656E 		.ascii	"Open-Canoe CAN Analyzer\000"
+ 164      2D43616E 
+ 164      6F652043 
+ 164      414E2041 
+ 164      6E616C79 
+ 165              		.section	.text.device_get_info,"ax",%progbits
+ 166              		.align	1
+ 167              		.global	device_get_info
+ 168              		.syntax unified
+ 169              		.thumb
+ 170              		.thumb_func
+ 172              	device_get_info:
+ 173              	.LVL4:
+ 174              	.LFB69:
+  71:src/device_manager.c **** 
+  72:src/device_manager.c **** void device_get_info(device_info_t *info)
+  73:src/device_manager.c **** {
+ 175              		.loc 1 73 1 is_stmt 1 view -0
+ 176              		.cfi_startproc
+ 177              		@ args = 0, pretend = 0, frame = 0
+ 178              		@ frame_needed = 0, uses_anonymous_args = 0
+  74:src/device_manager.c ****     if (!info) return;
+ 179              		.loc 1 74 5 view .LVU32
+ 180              		.loc 1 74 8 is_stmt 0 view .LVU33
+ 181 0000 B0B1     		cbz	r0, .L17
+  73:src/device_manager.c ****     if (!info) return;
+ 182              		.loc 1 73 1 view .LVU34
+ 183 0002 10B5     		push	{r4, lr}
+ 184              	.LCFI0:
+ 185              		.cfi_def_cfa_offset 8
+ 186              		.cfi_offset 4, -8
+ 187              		.cfi_offset 14, -4
+ 188 0004 0446     		mov	r4, r0
+  75:src/device_manager.c ****     memset(info, 0, sizeof(*info));
+ 189              		.loc 1 75 5 is_stmt 1 view .LVU35
+ 190 0006 4822     		movs	r2, #72
+ 191 0008 0021     		movs	r1, #0
+ 192 000a FFF7FEFF 		bl	memset
+ 193              	.LVL5:
+  76:src/device_manager.c ****     info->fw_major = FW_VERSION_MAJOR;
+ 194              		.loc 1 76 5 view .LVU36
+ 195              		.loc 1 76 20 is_stmt 0 view .LVU37
+ 196 000e 0123     		movs	r3, #1
+ 197 0010 2370     		strb	r3, [r4]
+  77:src/device_manager.c ****     info->fw_minor = FW_VERSION_MINOR;
+ 198              		.loc 1 77 5 is_stmt 1 view .LVU38
+  78:src/device_manager.c ****     info->fw_patch = FW_VERSION_PATCH;
+ 199              		.loc 1 78 5 view .LVU39
+  79:src/device_manager.c ****     info->device_serial = device_get_serial();
+ 200              		.loc 1 79 5 view .LVU40
+ 201              		.loc 1 79 27 is_stmt 0 view .LVU41
+ 202 0012 FFF7FEFF 		bl	device_get_serial
+ 203              	.LVL6:
+ 204              		.loc 1 79 25 view .LVU42
+ 205 0016 6064     		str	r0, [r4, #68]
+  80:src/device_manager.c ****     strncpy(info->mcu_model, MCU_MODEL_STRING, sizeof(info->mcu_model) - 1);
+ 206              		.loc 1 80 5 is_stmt 1 view .LVU43
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 6
+
+
+ 207 0018 1F22     		movs	r2, #31
+ 208 001a 0649     		ldr	r1, .L20
+ 209 001c E01C     		adds	r0, r4, #3
+ 210 001e FFF7FEFF 		bl	strncpy
+ 211              	.LVL7:
+  81:src/device_manager.c ****     strncpy(info->fw_description, FW_DESCRIPTION, sizeof(info->fw_description) - 1);
+ 212              		.loc 1 81 5 view .LVU44
+ 213 0022 1F22     		movs	r2, #31
+ 214 0024 0449     		ldr	r1, .L20+4
+ 215 0026 04F12300 		add	r0, r4, #35
+ 216 002a FFF7FEFF 		bl	strncpy
+ 217              	.LVL8:
+  82:src/device_manager.c **** }
+ 218              		.loc 1 82 1 is_stmt 0 view .LVU45
+ 219 002e 10BD     		pop	{r4, pc}
+ 220              	.LVL9:
+ 221              	.L17:
+ 222              	.LCFI1:
+ 223              		.cfi_def_cfa_offset 0
+ 224              		.cfi_restore 4
+ 225              		.cfi_restore 14
+ 226              		.loc 1 82 1 view .LVU46
+ 227 0030 7047     		bx	lr
+ 228              	.L21:
+ 229 0032 00BF     		.align	2
+ 230              	.L20:
+ 231 0034 00000000 		.word	.LC0
+ 232 0038 00000000 		.word	.LC1
+ 233              		.cfi_endproc
+ 234              	.LFE69:
+ 236              		.section	.text.device_get_capabilities,"ax",%progbits
+ 237              		.align	1
+ 238              		.global	device_get_capabilities
+ 239              		.syntax unified
+ 240              		.thumb
+ 241              		.thumb_func
+ 243              	device_get_capabilities:
+ 244              	.LVL10:
+ 245              	.LFB70:
+  83:src/device_manager.c **** 
+  84:src/device_manager.c **** void device_get_capabilities(device_capabilities_t *caps)
+  85:src/device_manager.c **** {
+ 246              		.loc 1 85 1 is_stmt 1 view -0
+ 247              		.cfi_startproc
+ 248              		@ args = 0, pretend = 0, frame = 0
+ 249              		@ frame_needed = 0, uses_anonymous_args = 0
+ 250              		@ link register save eliminated.
+  86:src/device_manager.c ****     if (!caps) return;
+ 251              		.loc 1 86 5 view .LVU48
+ 252              		.loc 1 86 8 is_stmt 0 view .LVU49
+ 253 0000 80B1     		cbz	r0, .L22
+  87:src/device_manager.c ****     memset(caps, 0, sizeof(*caps));
+ 254              		.loc 1 87 5 is_stmt 1 view .LVU50
+ 255 0002 0022     		movs	r2, #0
+ 256 0004 0260     		str	r2, [r0]	@ unaligned
+ 257 0006 4260     		str	r2, [r0, #4]	@ unaligned
+ 258 0008 8260     		str	r2, [r0, #8]	@ unaligned
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 7
+
+
+ 259 000a C260     		str	r2, [r0, #12]	@ unaligned
+  88:src/device_manager.c **** 
+  89:src/device_manager.c **** #if HAS_ADC
+  90:src/device_manager.c ****     caps->capability_bits |= CAP_ADC;
+ 260              		.loc 1 90 5 view .LVU51
+ 261              		.loc 1 90 27 is_stmt 0 view .LVU52
+ 262 000c 0122     		movs	r2, #1
+ 263 000e 0260     		str	r2, [r0]
+  91:src/device_manager.c ****     caps->max_adc_sample_rate = ADC_SAMPLING_RATE_MAX_HZ;
+ 264              		.loc 1 91 5 is_stmt 1 view .LVU53
+ 265              		.loc 1 91 31 is_stmt 0 view .LVU54
+ 266 0010 0549     		ldr	r1, .L24
+ 267 0012 8160     		str	r1, [r0, #8]
+  92:src/device_manager.c ****     caps->adc_resolution_bits = ADC_RESOLUTION_BITS;
+ 268              		.loc 1 92 5 is_stmt 1 view .LVU55
+ 269              		.loc 1 92 31 is_stmt 0 view .LVU56
+ 270 0014 0C21     		movs	r1, #12
+ 271 0016 0173     		strb	r1, [r0, #12]
+  93:src/device_manager.c **** #endif
+  94:src/device_manager.c **** 
+  95:src/device_manager.c **** #if HAS_USB_CDC
+  96:src/device_manager.c ****     caps->capability_bits |= CAP_USB_CDC;
+  97:src/device_manager.c **** #endif
+  98:src/device_manager.c **** 
+  99:src/device_manager.c **** #if CAN_INSTANCE_COUNT > 1
+ 100:src/device_manager.c ****     caps->capability_bits |= CAP_MULTI_CAN;
+ 101:src/device_manager.c **** #endif
+ 102:src/device_manager.c **** 
+ 103:src/device_manager.c ****     caps->can_channel_count = CAN_INSTANCE_COUNT;
+ 272              		.loc 1 103 5 is_stmt 1 view .LVU57
+ 273              		.loc 1 103 29 is_stmt 0 view .LVU58
+ 274 0018 0271     		strb	r2, [r0, #4]
+ 104:src/device_manager.c ****     caps->max_can_baudrate_kbps = 1000; /* bxCAN supports up to 1 Mbps */
+ 275              		.loc 1 104 5 is_stmt 1 view .LVU59
+ 276              		.loc 1 104 33 is_stmt 0 view .LVU60
+ 277 001a 4FF47A72 		mov	r2, #1000
+ 278 001e C281     		strh	r2, [r0, #14]	@ movhi
+ 105:src/device_manager.c ****     caps->capability_bits |= CAP_TIMESTAMP_US; /* We support μs timestamps */
+ 279              		.loc 1 105 5 is_stmt 1 view .LVU61
+ 280              		.loc 1 105 27 is_stmt 0 view .LVU62
+ 281 0020 0922     		movs	r2, #9
+ 282 0022 0260     		str	r2, [r0]
+ 283              	.L22:
+ 106:src/device_manager.c **** }
+ 284              		.loc 1 106 1 view .LVU63
+ 285 0024 7047     		bx	lr
+ 286              	.L25:
+ 287 0026 00BF     		.align	2
+ 288              	.L24:
+ 289 0028 40420F00 		.word	1000000
+ 290              		.cfi_endproc
+ 291              	.LFE70:
+ 293              		.section	.text.device_get_uptime_ms,"ax",%progbits
+ 294              		.align	1
+ 295              		.global	device_get_uptime_ms
+ 296              		.syntax unified
+ 297              		.thumb
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 8
+
+
+ 298              		.thumb_func
+ 300              	device_get_uptime_ms:
+ 301              	.LFB71:
+ 107:src/device_manager.c **** 
+ 108:src/device_manager.c **** uint32_t device_get_uptime_ms(void)
+ 109:src/device_manager.c **** {
+ 302              		.loc 1 109 1 is_stmt 1 view -0
+ 303              		.cfi_startproc
+ 304              		@ args = 0, pretend = 0, frame = 0
+ 305              		@ frame_needed = 0, uses_anonymous_args = 0
+ 306              		@ link register save eliminated.
+ 110:src/device_manager.c ****     return g_uptime_ms;
+ 307              		.loc 1 110 5 view .LVU65
+ 308              		.loc 1 110 12 is_stmt 0 view .LVU66
+ 309 0000 014B     		ldr	r3, .L27
+ 310 0002 1868     		ldr	r0, [r3]
+ 111:src/device_manager.c **** }
+ 311              		.loc 1 111 1 view .LVU67
+ 312 0004 7047     		bx	lr
+ 313              	.L28:
+ 314 0006 00BF     		.align	2
+ 315              	.L27:
+ 316 0008 00000000 		.word	.LANCHOR0
+ 317              		.cfi_endproc
+ 318              	.LFE71:
+ 320              		.section	.text.device_get_uptime_us,"ax",%progbits
+ 321              		.align	1
+ 322              		.global	device_get_uptime_us
+ 323              		.syntax unified
+ 324              		.thumb
+ 325              		.thumb_func
+ 327              	device_get_uptime_us:
+ 328              	.LFB72:
+ 112:src/device_manager.c **** 
+ 113:src/device_manager.c **** uint32_t device_get_uptime_us(void)
+ 114:src/device_manager.c **** {
+ 329              		.loc 1 114 1 is_stmt 1 view -0
+ 330              		.cfi_startproc
+ 331              		@ args = 0, pretend = 0, frame = 0
+ 332              		@ frame_needed = 0, uses_anonymous_args = 0
+ 333              		@ link register save eliminated.
+ 115:src/device_manager.c ****     /* Read TIM2 counter (free-running at TIMESTAMP_TIMER_CLK_HZ) */
+ 116:src/device_manager.c ****     return (uint32_t)(TIMESTAMP_TIMER->CNT);
+ 334              		.loc 1 116 5 view .LVU69
+ 335              		.loc 1 116 12 is_stmt 0 view .LVU70
+ 336 0000 4FF08043 		mov	r3, #1073741824
+ 337 0004 586A     		ldr	r0, [r3, #36]
+ 117:src/device_manager.c **** }
+ 338              		.loc 1 117 1 view .LVU71
+ 339 0006 7047     		bx	lr
+ 340              		.cfi_endproc
+ 341              	.LFE72:
+ 343              		.section	.text.device_soft_reset,"ax",%progbits
+ 344              		.align	1
+ 345              		.global	device_soft_reset
+ 346              		.syntax unified
+ 347              		.thumb
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 9
+
+
+ 348              		.thumb_func
+ 350              	device_soft_reset:
+ 351              	.LFB73:
+ 118:src/device_manager.c **** 
+ 119:src/device_manager.c **** void device_soft_reset(void)
+ 120:src/device_manager.c **** {
+ 352              		.loc 1 120 1 is_stmt 1 view -0
+ 353              		.cfi_startproc
+ 354              		@ Volatile: function does not return.
+ 355              		@ args = 0, pretend = 0, frame = 0
+ 356              		@ frame_needed = 0, uses_anonymous_args = 0
+ 357              		@ link register save eliminated.
+ 121:src/device_manager.c ****     __disable_irq();
+ 358              		.loc 1 121 5 view .LVU73
+ 359              	.LBB6:
+ 360              	.LBI6:
+ 361              		.file 2 "./f103/CMSIS/Core/Include/cmsis_gcc.h"
+   1:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**************************************************************************//**
+   2:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * @file     cmsis_gcc.h
+   3:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * @brief    CMSIS compiler GCC header file
+   4:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * @version  V5.0.4
+   5:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * @date     09. April 2018
+   6:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  ******************************************************************************/
+   7:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /*
+   8:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * Copyright (c) 2009-2018 Arm Limited. All rights reserved.
+   9:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  *
+  10:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * SPDX-License-Identifier: Apache-2.0
+  11:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  *
+  12:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * Licensed under the Apache License, Version 2.0 (the License); you may
+  13:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * not use this file except in compliance with the License.
+  14:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * You may obtain a copy of the License at
+  15:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  *
+  16:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * www.apache.org/licenses/LICENSE-2.0
+  17:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  *
+  18:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * Unless required by applicable law or agreed to in writing, software
+  19:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * distributed under the License is distributed on an AS IS BASIS, WITHOUT
+  20:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  21:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * See the License for the specific language governing permissions and
+  22:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * limitations under the License.
+  23:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+  24:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+  25:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef __CMSIS_GCC_H
+  26:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_H
+  27:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+  28:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /* ignore some GCC warnings */
+  29:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #pragma GCC diagnostic push
+  30:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #pragma GCC diagnostic ignored "-Wsign-conversion"
+  31:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #pragma GCC diagnostic ignored "-Wconversion"
+  32:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #pragma GCC diagnostic ignored "-Wunused-parameter"
+  33:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+  34:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /* Fallback for __has_builtin */
+  35:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef __has_builtin
+  36:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __has_builtin(x) (0)
+  37:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  38:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+  39:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /* CMSIS compiler specific defines */
+  40:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __ASM
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 10
+
+
+  41:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __ASM                                  __asm
+  42:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  43:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __INLINE
+  44:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __INLINE                               inline
+  45:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  46:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __STATIC_INLINE
+  47:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __STATIC_INLINE                        static inline
+  48:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  49:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __STATIC_FORCEINLINE                 
+  50:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __STATIC_FORCEINLINE                   __attribute__((always_inline)) static inline
+  51:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif                                           
+  52:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __NO_RETURN
+  53:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __NO_RETURN                            __attribute__((__noreturn__))
+  54:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  55:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __USED
+  56:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __USED                                 __attribute__((used))
+  57:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  58:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __WEAK
+  59:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __WEAK                                 __attribute__((weak))
+  60:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  61:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __PACKED
+  62:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __PACKED                               __attribute__((packed, aligned(1)))
+  63:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  64:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __PACKED_STRUCT
+  65:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __PACKED_STRUCT                        struct __attribute__((packed, aligned(1)))
+  66:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  67:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __PACKED_UNION
+  68:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __PACKED_UNION                         union __attribute__((packed, aligned(1)))
+  69:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  70:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __UNALIGNED_UINT32        /* deprecated */
+  71:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic push
+  72:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wpacked"
+  73:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wattributes"
+  74:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   struct __attribute__((packed)) T_UINT32 { uint32_t v; };
+  75:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic pop
+  76:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __UNALIGNED_UINT32(x)                  (((struct T_UINT32 *)(x))->v)
+  77:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  78:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __UNALIGNED_UINT16_WRITE
+  79:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic push
+  80:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wpacked"
+  81:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wattributes"
+  82:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __PACKED_STRUCT T_UINT16_WRITE { uint16_t v; };
+  83:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic pop
+  84:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __UNALIGNED_UINT16_WRITE(addr, val)    (void)((((struct T_UINT16_WRITE *)(void *)(addr))-
+  85:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  86:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __UNALIGNED_UINT16_READ
+  87:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic push
+  88:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wpacked"
+  89:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wattributes"
+  90:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __PACKED_STRUCT T_UINT16_READ { uint16_t v; };
+  91:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic pop
+  92:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __UNALIGNED_UINT16_READ(addr)          (((const struct T_UINT16_READ *)(const void *)(add
+  93:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+  94:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __UNALIGNED_UINT32_WRITE
+  95:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic push
+  96:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wpacked"
+  97:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wattributes"
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 11
+
+
+  98:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __PACKED_STRUCT T_UINT32_WRITE { uint32_t v; };
+  99:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic pop
+ 100:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __UNALIGNED_UINT32_WRITE(addr, val)    (void)((((struct T_UINT32_WRITE *)(void *)(addr))-
+ 101:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 102:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __UNALIGNED_UINT32_READ
+ 103:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic push
+ 104:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wpacked"
+ 105:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic ignored "-Wattributes"
+ 106:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __PACKED_STRUCT T_UINT32_READ { uint32_t v; };
+ 107:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #pragma GCC diagnostic pop
+ 108:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __UNALIGNED_UINT32_READ(addr)          (((const struct T_UINT32_READ *)(const void *)(add
+ 109:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 110:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __ALIGNED
+ 111:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __ALIGNED(x)                           __attribute__((aligned(x)))
+ 112:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 113:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #ifndef   __RESTRICT
+ 114:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   #define __RESTRICT                             __restrict
+ 115:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 116:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 117:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 118:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /* ###########################  Core Function Access  ########################### */
+ 119:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /** \ingroup  CMSIS_Core_FunctionInterface
+ 120:./f103/CMSIS/Core/Include/cmsis_gcc.h ****     \defgroup CMSIS_Core_RegAccFunctions CMSIS Core Register Access Functions
+ 121:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   @{
+ 122:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 123:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 124:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 125:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Enable IRQ Interrupts
+ 126:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Enables IRQ interrupts by clearing the I-bit in the CPSR.
+ 127:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            Can only be executed in Privileged modes.
+ 128:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 129:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __enable_irq(void)
+ 130:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 131:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("cpsie i" : : : "memory");
+ 132:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 133:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 134:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 135:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 136:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Disable IRQ Interrupts
+ 137:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Disables IRQ interrupts by setting the I-bit in the CPSR.
+ 138:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            Can only be executed in Privileged modes.
+ 139:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 140:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __disable_irq(void)
+ 362              		.loc 2 140 27 view .LVU74
+ 363              	.LBB7:
+ 141:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 142:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("cpsid i" : : : "memory");
+ 364              		.loc 2 142 3 view .LVU75
+ 365              		.syntax unified
+ 366              	@ 142 "./f103/CMSIS/Core/Include/cmsis_gcc.h" 1
+ 367 0000 72B6     		cpsid i
+ 368              	@ 0 "" 2
+ 369              		.thumb
+ 370              		.syntax unified
+ 371              	.LBE7:
+ 372              	.LBE6:
+ 122:src/device_manager.c ****     /* Request system reset via SCB AIRCR register */
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 12
+
+
+ 123:src/device_manager.c ****     SCB->AIRCR = ((0x5FAUL << SCB_AIRCR_VECTKEY_Pos) |
+ 373              		.loc 1 123 5 view .LVU76
+ 124:src/device_manager.c ****                   (SCB->AIRCR & SCB_AIRCR_PRIGROUP_Msk) |
+ 374              		.loc 1 124 23 is_stmt 0 view .LVU77
+ 375 0002 0549     		ldr	r1, .L32
+ 376 0004 CA68     		ldr	r2, [r1, #12]
+ 377              		.loc 1 124 31 view .LVU78
+ 378 0006 02F4E062 		and	r2, r2, #1792
+ 379              		.loc 1 124 57 view .LVU79
+ 380 000a 044B     		ldr	r3, .L32+4
+ 381 000c 1343     		orrs	r3, r3, r2
+ 123:src/device_manager.c ****                   (SCB->AIRCR & SCB_AIRCR_PRIGROUP_Msk) |
+ 382              		.loc 1 123 16 view .LVU80
+ 383 000e CB60     		str	r3, [r1, #12]
+ 125:src/device_manager.c ****                   SCB_AIRCR_SYSRESETREQ_Msk);
+ 126:src/device_manager.c ****     __DSB();
+ 384              		.loc 1 126 5 is_stmt 1 view .LVU81
+ 385              	.LBB8:
+ 386              	.LBI8:
+ 143:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 144:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 145:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 146:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 147:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Control Register
+ 148:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the content of the Control Register.
+ 149:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Control Register value
+ 150:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 151:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_CONTROL(void)
+ 152:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 153:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 154:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 155:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, control" : "=r" (result) );
+ 156:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 157:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 158:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 159:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 160:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 161:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 162:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Control Register (non-secure)
+ 163:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the content of the non-secure Control Register when in secure mode.
+ 164:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               non-secure Control Register value
+ 165:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 166:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_CONTROL_NS(void)
+ 167:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 168:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 169:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 170:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, control_ns" : "=r" (result) );
+ 171:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 172:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 173:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 174:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 175:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 176:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 177:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Control Register
+ 178:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Writes the given value to the Control Register.
+ 179:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    control  Control Register value to set
+ 180:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 13
+
+
+ 181:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_CONTROL(uint32_t control)
+ 182:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 183:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR control, %0" : : "r" (control) : "memory");
+ 184:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 185:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 186:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 187:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 188:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 189:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Control Register (non-secure)
+ 190:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Writes the given value to the non-secure Control Register when in secure state.
+ 191:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    control  Control Register value to set
+ 192:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 193:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_CONTROL_NS(uint32_t control)
+ 194:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 195:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR control_ns, %0" : : "r" (control) : "memory");
+ 196:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 197:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 198:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 199:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 200:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 201:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get IPSR Register
+ 202:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the content of the IPSR Register.
+ 203:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               IPSR Register value
+ 204:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 205:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_IPSR(void)
+ 206:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 207:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 208:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 209:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, ipsr" : "=r" (result) );
+ 210:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 211:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 212:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 213:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 214:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 215:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get APSR Register
+ 216:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the content of the APSR Register.
+ 217:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               APSR Register value
+ 218:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 219:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_APSR(void)
+ 220:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 221:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 222:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 223:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, apsr" : "=r" (result) );
+ 224:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 225:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 226:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 227:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 228:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 229:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get xPSR Register
+ 230:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the content of the xPSR Register.
+ 231:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               xPSR Register value
+ 232:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 233:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_xPSR(void)
+ 234:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 235:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 236:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 237:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, xpsr" : "=r" (result) );
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 14
+
+
+ 238:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 239:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 240:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 241:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 242:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 243:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Process Stack Pointer
+ 244:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Process Stack Pointer (PSP).
+ 245:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               PSP Register value
+ 246:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 247:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_PSP(void)
+ 248:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 249:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 250:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 251:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, psp"  : "=r" (result) );
+ 252:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 253:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 254:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 255:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 256:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 257:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 258:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Process Stack Pointer (non-secure)
+ 259:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Process Stack Pointer (PSP) when in secure s
+ 260:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               PSP Register value
+ 261:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 262:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_PSP_NS(void)
+ 263:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 264:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 265:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 266:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, psp_ns"  : "=r" (result) );
+ 267:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 268:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 269:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 270:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 271:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 272:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 273:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Process Stack Pointer
+ 274:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Process Stack Pointer (PSP).
+ 275:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    topOfProcStack  Process Stack Pointer value to set
+ 276:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 277:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_PSP(uint32_t topOfProcStack)
+ 278:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 279:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR psp, %0" : : "r" (topOfProcStack) : );
+ 280:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 281:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 282:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 283:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 284:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 285:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Process Stack Pointer (non-secure)
+ 286:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Process Stack Pointer (PSP) when in secure sta
+ 287:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    topOfProcStack  Process Stack Pointer value to set
+ 288:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 289:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_PSP_NS(uint32_t topOfProcStack)
+ 290:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 291:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR psp_ns, %0" : : "r" (topOfProcStack) : );
+ 292:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 293:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 294:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 15
+
+
+ 295:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 296:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 297:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Main Stack Pointer
+ 298:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Main Stack Pointer (MSP).
+ 299:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               MSP Register value
+ 300:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 301:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_MSP(void)
+ 302:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 303:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 304:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 305:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, msp" : "=r" (result) );
+ 306:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 307:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 308:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 309:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 310:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 311:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 312:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Main Stack Pointer (non-secure)
+ 313:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Main Stack Pointer (MSP) when in secure stat
+ 314:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               MSP Register value
+ 315:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 316:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_MSP_NS(void)
+ 317:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 318:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 319:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 320:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, msp_ns" : "=r" (result) );
+ 321:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 322:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 323:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 324:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 325:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 326:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 327:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Main Stack Pointer
+ 328:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Main Stack Pointer (MSP).
+ 329:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    topOfMainStack  Main Stack Pointer value to set
+ 330:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 331:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_MSP(uint32_t topOfMainStack)
+ 332:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 333:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR msp, %0" : : "r" (topOfMainStack) : );
+ 334:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 335:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 336:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 337:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 338:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 339:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Main Stack Pointer (non-secure)
+ 340:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Main Stack Pointer (MSP) when in secure state.
+ 341:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    topOfMainStack  Main Stack Pointer value to set
+ 342:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 343:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_MSP_NS(uint32_t topOfMainStack)
+ 344:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 345:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR msp_ns, %0" : : "r" (topOfMainStack) : );
+ 346:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 347:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 348:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 349:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 350:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 351:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 16
+
+
+ 352:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Stack Pointer (non-secure)
+ 353:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Stack Pointer (SP) when in secure state.
+ 354:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               SP Register value
+ 355:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 356:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_SP_NS(void)
+ 357:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 358:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 359:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 360:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, sp_ns" : "=r" (result) );
+ 361:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 362:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 363:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 364:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 365:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 366:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Stack Pointer (non-secure)
+ 367:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Stack Pointer (SP) when in secure state.
+ 368:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    topOfStack  Stack Pointer value to set
+ 369:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 370:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_SP_NS(uint32_t topOfStack)
+ 371:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 372:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR sp_ns, %0" : : "r" (topOfStack) : );
+ 373:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 374:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 375:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 376:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 377:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 378:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Priority Mask
+ 379:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current state of the priority mask bit from the Priority Mask Register.
+ 380:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Priority Mask value
+ 381:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 382:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_PRIMASK(void)
+ 383:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 384:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 385:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 386:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, primask" : "=r" (result) :: "memory");
+ 387:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 388:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 389:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 390:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 391:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 392:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 393:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Priority Mask (non-secure)
+ 394:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current state of the non-secure priority mask bit from the Priority Mask Reg
+ 395:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Priority Mask value
+ 396:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 397:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_PRIMASK_NS(void)
+ 398:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 399:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 400:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 401:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, primask_ns" : "=r" (result) :: "memory");
+ 402:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 403:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 404:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 405:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 406:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 407:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 408:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Priority Mask
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 17
+
+
+ 409:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Priority Mask Register.
+ 410:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    priMask  Priority Mask
+ 411:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 412:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_PRIMASK(uint32_t priMask)
+ 413:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 414:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR primask, %0" : : "r" (priMask) : "memory");
+ 415:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 416:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 417:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 418:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 419:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 420:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Priority Mask (non-secure)
+ 421:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Priority Mask Register when in secure state.
+ 422:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    priMask  Priority Mask
+ 423:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 424:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_PRIMASK_NS(uint32_t priMask)
+ 425:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 426:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR primask_ns, %0" : : "r" (priMask) : "memory");
+ 427:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 428:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 429:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 430:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 431:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if ((defined (__ARM_ARCH_7M__      ) && (__ARM_ARCH_7M__      == 1)) || \
+ 432:./f103/CMSIS/Core/Include/cmsis_gcc.h ****      (defined (__ARM_ARCH_7EM__     ) && (__ARM_ARCH_7EM__     == 1)) || \
+ 433:./f103/CMSIS/Core/Include/cmsis_gcc.h ****      (defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1))    )
+ 434:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 435:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Enable FIQ
+ 436:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Enables FIQ interrupts by clearing the F-bit in the CPSR.
+ 437:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            Can only be executed in Privileged modes.
+ 438:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 439:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __enable_fault_irq(void)
+ 440:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 441:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("cpsie f" : : : "memory");
+ 442:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 443:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 444:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 445:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 446:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Disable FIQ
+ 447:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Disables FIQ interrupts by setting the F-bit in the CPSR.
+ 448:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            Can only be executed in Privileged modes.
+ 449:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 450:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __disable_fault_irq(void)
+ 451:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 452:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("cpsid f" : : : "memory");
+ 453:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 454:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 455:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 456:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 457:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Base Priority
+ 458:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Base Priority register.
+ 459:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Base Priority register value
+ 460:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 461:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_BASEPRI(void)
+ 462:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 463:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 464:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 465:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, basepri" : "=r" (result) );
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 18
+
+
+ 466:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 467:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 468:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 469:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 470:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 471:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 472:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Base Priority (non-secure)
+ 473:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Base Priority register when in secure state.
+ 474:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Base Priority register value
+ 475:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 476:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_BASEPRI_NS(void)
+ 477:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 478:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 479:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 480:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, basepri_ns" : "=r" (result) );
+ 481:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 482:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 483:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 484:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 485:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 486:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 487:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Base Priority
+ 488:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Base Priority register.
+ 489:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    basePri  Base Priority value to set
+ 490:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 491:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_BASEPRI(uint32_t basePri)
+ 492:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 493:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR basepri, %0" : : "r" (basePri) : "memory");
+ 494:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 495:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 496:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 497:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 498:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 499:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Base Priority (non-secure)
+ 500:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Base Priority register when in secure state.
+ 501:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    basePri  Base Priority value to set
+ 502:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 503:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_BASEPRI_NS(uint32_t basePri)
+ 504:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 505:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR basepri_ns, %0" : : "r" (basePri) : "memory");
+ 506:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 507:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 508:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 509:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 510:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 511:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Base Priority with condition
+ 512:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Base Priority register only if BASEPRI masking is disable
+ 513:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            or the new value increases the BASEPRI priority level.
+ 514:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    basePri  Base Priority value to set
+ 515:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 516:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_BASEPRI_MAX(uint32_t basePri)
+ 517:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 518:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR basepri_max, %0" : : "r" (basePri) : "memory");
+ 519:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 520:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 521:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 522:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 19
+
+
+ 523:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Fault Mask
+ 524:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Fault Mask register.
+ 525:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Fault Mask register value
+ 526:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 527:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_FAULTMASK(void)
+ 528:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 529:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 530:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 531:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, faultmask" : "=r" (result) );
+ 532:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 533:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 534:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 535:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 536:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 537:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 538:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Fault Mask (non-secure)
+ 539:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Fault Mask register when in secure state.
+ 540:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Fault Mask register value
+ 541:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 542:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_FAULTMASK_NS(void)
+ 543:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 544:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 545:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 546:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, faultmask_ns" : "=r" (result) );
+ 547:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 548:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 549:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 550:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 551:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 552:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 553:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Fault Mask
+ 554:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Fault Mask register.
+ 555:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    faultMask  Fault Mask value to set
+ 556:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 557:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_FAULTMASK(uint32_t faultMask)
+ 558:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 559:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR faultmask, %0" : : "r" (faultMask) : "memory");
+ 560:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 561:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 562:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 563:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE ) && (__ARM_FEATURE_CMSE == 3))
+ 564:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 565:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Fault Mask (non-secure)
+ 566:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Fault Mask register when in secure state.
+ 567:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    faultMask  Fault Mask value to set
+ 568:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 569:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_FAULTMASK_NS(uint32_t faultMask)
+ 570:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 571:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR faultmask_ns, %0" : : "r" (faultMask) : "memory");
+ 572:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 573:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 574:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 575:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif /* ((defined (__ARM_ARCH_7M__      ) && (__ARM_ARCH_7M__      == 1)) || \
+ 576:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            (defined (__ARM_ARCH_7EM__     ) && (__ARM_ARCH_7EM__     == 1)) || \
+ 577:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            (defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1))    ) */
+ 578:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 579:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 20
+
+
+ 580:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if ((defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)) || \
+ 581:./f103/CMSIS/Core/Include/cmsis_gcc.h ****      (defined (__ARM_ARCH_8M_BASE__ ) && (__ARM_ARCH_8M_BASE__ == 1))    )
+ 582:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 583:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 584:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Process Stack Pointer Limit
+ 585:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 586:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence zero is returned always in non-secure
+ 587:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   mode.
+ 588:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   
+ 589:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Process Stack Pointer Limit (PSPLIM).
+ 590:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               PSPLIM Register value
+ 591:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 592:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_PSPLIM(void)
+ 593:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 594:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)) && \
+ 595:./f103/CMSIS/Core/Include/cmsis_gcc.h ****     (!defined (__ARM_FEATURE_CMSE) || (__ARM_FEATURE_CMSE < 3)))
+ 596:./f103/CMSIS/Core/Include/cmsis_gcc.h ****     // without main extensions, the non-secure PSPLIM is RAZ/WI
+ 597:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return 0U;
+ 598:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 599:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 600:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, psplim"  : "=r" (result) );
+ 601:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return result;
+ 602:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 603:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 604:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 605:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE) && (__ARM_FEATURE_CMSE == 3))
+ 606:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 607:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Process Stack Pointer Limit (non-secure)
+ 608:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 609:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence zero is returned always.
+ 610:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 611:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Process Stack Pointer Limit (PSPLIM) when in
+ 612:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               PSPLIM Register value
+ 613:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 614:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_PSPLIM_NS(void)
+ 615:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 616:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)))
+ 617:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure PSPLIM is RAZ/WI
+ 618:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return 0U;
+ 619:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 620:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 621:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, psplim_ns"  : "=r" (result) );
+ 622:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return result;
+ 623:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 624:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 625:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 626:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 627:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 628:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 629:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Process Stack Pointer Limit
+ 630:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 631:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence the write is silently ignored in non-secure
+ 632:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   mode.
+ 633:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   
+ 634:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Process Stack Pointer Limit (PSPLIM).
+ 635:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    ProcStackPtrLimit  Process Stack Pointer Limit value to set
+ 636:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 21
+
+
+ 637:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_PSPLIM(uint32_t ProcStackPtrLimit)
+ 638:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 639:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)) && \
+ 640:./f103/CMSIS/Core/Include/cmsis_gcc.h ****     (!defined (__ARM_FEATURE_CMSE) || (__ARM_FEATURE_CMSE < 3)))
+ 641:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure PSPLIM is RAZ/WI
+ 642:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   (void)ProcStackPtrLimit;
+ 643:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 644:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR psplim, %0" : : "r" (ProcStackPtrLimit));
+ 645:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 646:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 647:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 648:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 649:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE  ) && (__ARM_FEATURE_CMSE   == 3))
+ 650:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 651:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Process Stack Pointer (non-secure)
+ 652:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 653:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence the write is silently ignored.
+ 654:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 655:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Process Stack Pointer Limit (PSPLIM) when in s
+ 656:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    ProcStackPtrLimit  Process Stack Pointer Limit value to set
+ 657:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 658:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_PSPLIM_NS(uint32_t ProcStackPtrLimit)
+ 659:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 660:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)))
+ 661:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure PSPLIM is RAZ/WI
+ 662:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   (void)ProcStackPtrLimit;
+ 663:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 664:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR psplim_ns, %0\n" : : "r" (ProcStackPtrLimit));
+ 665:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 666:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 667:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 668:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 669:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 670:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 671:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Main Stack Pointer Limit
+ 672:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 673:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence zero is returned always in non-secure
+ 674:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   mode.
+ 675:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 676:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Main Stack Pointer Limit (MSPLIM).
+ 677:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               MSPLIM Register value
+ 678:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 679:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_MSPLIM(void)
+ 680:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 681:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)) && \
+ 682:./f103/CMSIS/Core/Include/cmsis_gcc.h ****     (!defined (__ARM_FEATURE_CMSE) || (__ARM_FEATURE_CMSE < 3)))
+ 683:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure MSPLIM is RAZ/WI
+ 684:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return 0U;
+ 685:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 686:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 687:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, msplim" : "=r" (result) );
+ 688:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return result;
+ 689:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 690:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 691:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 692:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 693:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE  ) && (__ARM_FEATURE_CMSE   == 3))
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 22
+
+
+ 694:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 695:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get Main Stack Pointer Limit (non-secure)
+ 696:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 697:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence zero is returned always.
+ 698:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 699:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the non-secure Main Stack Pointer Limit(MSPLIM) when in sec
+ 700:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               MSPLIM Register value
+ 701:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 702:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __TZ_get_MSPLIM_NS(void)
+ 703:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 704:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)))
+ 705:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure MSPLIM is RAZ/WI
+ 706:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return 0U;
+ 707:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 708:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 709:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MRS %0, msplim_ns" : "=r" (result) );
+ 710:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return result;
+ 711:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 712:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 713:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 714:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 715:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 716:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 717:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Main Stack Pointer Limit
+ 718:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 719:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence the write is silently ignored in non-secure
+ 720:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   mode.
+ 721:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 722:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Main Stack Pointer Limit (MSPLIM).
+ 723:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    MainStackPtrLimit  Main Stack Pointer Limit value to set
+ 724:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 725:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_MSPLIM(uint32_t MainStackPtrLimit)
+ 726:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 727:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)) && \
+ 728:./f103/CMSIS/Core/Include/cmsis_gcc.h ****     (!defined (__ARM_FEATURE_CMSE) || (__ARM_FEATURE_CMSE < 3)))
+ 729:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure MSPLIM is RAZ/WI
+ 730:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   (void)MainStackPtrLimit;
+ 731:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 732:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR msplim, %0" : : "r" (MainStackPtrLimit));
+ 733:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 734:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 735:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 736:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 737:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (defined (__ARM_FEATURE_CMSE  ) && (__ARM_FEATURE_CMSE   == 3))
+ 738:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 739:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set Main Stack Pointer Limit (non-secure)
+ 740:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Devices without ARMv8-M Main Extensions (i.e. Cortex-M23) lack the non-secure
+ 741:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Stack Pointer Limit register hence the write is silently ignored.
+ 742:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 743:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the non-secure Main Stack Pointer Limit (MSPLIM) when in secu
+ 744:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    MainStackPtrLimit  Main Stack Pointer value to set
+ 745:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 746:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __TZ_set_MSPLIM_NS(uint32_t MainStackPtrLimit)
+ 747:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 748:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if (!(defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)))
+ 749:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   // without main extensions, the non-secure MSPLIM is RAZ/WI
+ 750:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   (void)MainStackPtrLimit;
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 23
+
+
+ 751:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 752:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("MSR msplim_ns, %0" : : "r" (MainStackPtrLimit));
+ 753:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 754:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 755:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 756:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 757:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif /* ((defined (__ARM_ARCH_8M_MAIN__ ) && (__ARM_ARCH_8M_MAIN__ == 1)) || \
+ 758:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            (defined (__ARM_ARCH_8M_BASE__ ) && (__ARM_ARCH_8M_BASE__ == 1))    ) */
+ 759:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 760:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 761:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 762:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Get FPSCR
+ 763:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Returns the current value of the Floating Point Status/Control register.
+ 764:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \return               Floating Point Status/Control register value
+ 765:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 766:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE uint32_t __get_FPSCR(void)
+ 767:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 768:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if ((defined (__FPU_PRESENT) && (__FPU_PRESENT == 1U)) && \
+ 769:./f103/CMSIS/Core/Include/cmsis_gcc.h ****      (defined (__FPU_USED   ) && (__FPU_USED    == 1U))     )
+ 770:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if __has_builtin(__builtin_arm_get_fpscr) 
+ 771:./f103/CMSIS/Core/Include/cmsis_gcc.h **** // Re-enable using built-in when GCC has been fixed
+ 772:./f103/CMSIS/Core/Include/cmsis_gcc.h **** // || (__GNUC__ > 7) || (__GNUC__ == 7 && __GNUC_MINOR__ >= 2)
+ 773:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   /* see https://gcc.gnu.org/ml/gcc-patches/2017-04/msg00443.html */
+ 774:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return __builtin_arm_get_fpscr();
+ 775:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 776:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   uint32_t result;
+ 777:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 778:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("VMRS %0, fpscr" : "=r" (result) );
+ 779:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(result);
+ 780:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 781:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 782:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   return(0U);
+ 783:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 784:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 785:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 786:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 787:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 788:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Set FPSCR
+ 789:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Assigns the given value to the Floating Point Status/Control register.
+ 790:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \param [in]    fpscr  Floating Point Status/Control value to set
+ 791:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 792:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __set_FPSCR(uint32_t fpscr)
+ 793:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 794:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if ((defined (__FPU_PRESENT) && (__FPU_PRESENT == 1U)) && \
+ 795:./f103/CMSIS/Core/Include/cmsis_gcc.h ****      (defined (__FPU_USED   ) && (__FPU_USED    == 1U))     )
+ 796:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if __has_builtin(__builtin_arm_set_fpscr)
+ 797:./f103/CMSIS/Core/Include/cmsis_gcc.h **** // Re-enable using built-in when GCC has been fixed
+ 798:./f103/CMSIS/Core/Include/cmsis_gcc.h **** // || (__GNUC__ > 7) || (__GNUC__ == 7 && __GNUC_MINOR__ >= 2)
+ 799:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   /* see https://gcc.gnu.org/ml/gcc-patches/2017-04/msg00443.html */
+ 800:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __builtin_arm_set_fpscr(fpscr);
+ 801:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 802:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("VMSR fpscr, %0" : : "r" (fpscr) : "vfpcc", "memory");
+ 803:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 804:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 805:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   (void)fpscr;
+ 806:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 807:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 24
+
+
+ 808:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 809:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 810:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /*@} end of CMSIS_Core_RegAccFunctions */
+ 811:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 812:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 813:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /* ##########################  Core Instruction Access  ######################### */
+ 814:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /** \defgroup CMSIS_Core_InstructionInterface CMSIS Core Instruction Interface
+ 815:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   Access to dedicated instructions
+ 816:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   @{
+ 817:./f103/CMSIS/Core/Include/cmsis_gcc.h **** */
+ 818:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 819:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /* Define macros for porting to both thumb1 and thumb2.
+ 820:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * For thumb1, use low register (r0-r7), specified by constraint "l"
+ 821:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  * Otherwise, use general registers, specified by constraint "r" */
+ 822:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #if defined (__thumb__) && !defined (__thumb2__)
+ 823:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_OUT_REG(r) "=l" (r)
+ 824:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_RW_REG(r) "+l" (r)
+ 825:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_USE_REG(r) "l" (r)
+ 826:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #else
+ 827:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_OUT_REG(r) "=r" (r)
+ 828:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_RW_REG(r) "+r" (r)
+ 829:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __CMSIS_GCC_USE_REG(r) "r" (r)
+ 830:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #endif
+ 831:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 832:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 833:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   No Operation
+ 834:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details No Operation does nothing. This instruction can be used for code alignment purposes.
+ 835:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 836:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __NOP()                             __ASM volatile ("nop")
+ 837:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 838:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 839:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Wait For Interrupt
+ 840:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Wait For Interrupt is a hint instruction that suspends execution until one of a number o
+ 841:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 842:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __WFI()                             __ASM volatile ("wfi")
+ 843:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 844:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 845:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 846:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Wait For Event
+ 847:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Wait For Event is a hint instruction that permits the processor to enter
+ 848:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            a low-power state until one of a number of events occurs.
+ 849:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 850:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __WFE()                             __ASM volatile ("wfe")
+ 851:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 852:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 853:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 854:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Send Event
+ 855:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Send Event is a hint instruction. It causes an event to be signaled to the CPU.
+ 856:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 857:./f103/CMSIS/Core/Include/cmsis_gcc.h **** #define __SEV()                             __ASM volatile ("sev")
+ 858:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 859:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 860:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 861:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Instruction Synchronization Barrier
+ 862:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Instruction Synchronization Barrier flushes the pipeline in the processor,
+ 863:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            so that all instructions following the ISB are fetched from cache or memory,
+ 864:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            after the instruction has been completed.
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 25
+
+
+ 865:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 866:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __ISB(void)
+ 867:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 868:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("isb 0xF":::"memory");
+ 869:./f103/CMSIS/Core/Include/cmsis_gcc.h **** }
+ 870:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 871:./f103/CMSIS/Core/Include/cmsis_gcc.h **** 
+ 872:./f103/CMSIS/Core/Include/cmsis_gcc.h **** /**
+ 873:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \brief   Data Synchronization Barrier
+ 874:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   \details Acts as a special kind of Data Memory Barrier.
+ 875:./f103/CMSIS/Core/Include/cmsis_gcc.h ****            It completes when all explicit memory accesses before this instruction complete.
+ 876:./f103/CMSIS/Core/Include/cmsis_gcc.h ****  */
+ 877:./f103/CMSIS/Core/Include/cmsis_gcc.h **** __STATIC_FORCEINLINE void __DSB(void)
+ 387              		.loc 2 877 27 view .LVU82
+ 388              	.LBB9:
+ 878:./f103/CMSIS/Core/Include/cmsis_gcc.h **** {
+ 879:./f103/CMSIS/Core/Include/cmsis_gcc.h ****   __ASM volatile ("dsb 0xF":::"memory");
+ 389              		.loc 2 879 3 view .LVU83
+ 390              		.syntax unified
+ 391              	@ 879 "./f103/CMSIS/Core/Include/cmsis_gcc.h" 1
+ 392 0010 BFF34F8F 		dsb 0xF
+ 393              	@ 0 "" 2
+ 394              		.thumb
+ 395              		.syntax unified
+ 396              	.L31:
+ 397              	.LBE9:
+ 398              	.LBE8:
+ 127:src/device_manager.c ****     while (1) { /* Wait for reset */ }
+ 399              		.loc 1 127 5 discriminator 1 view .LVU84
+ 400              		.loc 1 127 38 discriminator 1 view .LVU85
+ 401              		.loc 1 127 11 discriminator 1 view .LVU86
+ 402 0014 FEE7     		b	.L31
+ 403              	.L33:
+ 404 0016 00BF     		.align	2
+ 405              	.L32:
+ 406 0018 00ED00E0 		.word	-536810240
+ 407 001c 0400FA05 		.word	100270084
+ 408              		.cfi_endproc
+ 409              	.LFE73:
+ 411              		.section	.bss.g_uptime_ms,"aw",%nobits
+ 412              		.align	2
+ 413              		.set	.LANCHOR0,. + 0
+ 416              	g_uptime_ms:
+ 417 0000 00000000 		.space	4
+ 418              		.text
+ 419              	.Letext0:
+ 420              		.file 3 "d:\\stm32\\environment\\gcc-arm-none-eabi-10.3-2021.10\\arm-none-eabi\\include\\machine\\
+ 421              		.file 4 "d:\\stm32\\environment\\gcc-arm-none-eabi-10.3-2021.10\\arm-none-eabi\\include\\sys\\_std
+ 422              		.file 5 "./inc/device_api.h"
+ 423              		.file 6 "./f103/CMSIS/Core/Include/core_cm3.h"
+ 424              		.file 7 "./f103/CMSIS/Device/ST/STM32F1xx/Include/stm32f103xb.h"
+ 425              		.file 8 "<built-in>"
+ 426              		.file 9 "d:\\stm32\\environment\\gcc-arm-none-eabi-10.3-2021.10\\arm-none-eabi\\include\\string.h"
+ARM GAS  C:\WINDOWS\cc94ow4r.s 			page 26
+
+
+DEFINED SYMBOLS
+                            *ABS*:00000000 device_manager.c
+C:\WINDOWS\cc94ow4r.s:18     .text.device_tick_ms:00000000 $t
+C:\WINDOWS\cc94ow4r.s:24     .text.device_tick_ms:00000000 device_tick_ms
+C:\WINDOWS\cc94ow4r.s:43     .text.device_tick_ms:0000000c $d
+C:\WINDOWS\cc94ow4r.s:48     .rodata.device_get_mcu_model.str1.4:00000000 $d
+C:\WINDOWS\cc94ow4r.s:52     .text.device_get_mcu_model:00000000 $t
+C:\WINDOWS\cc94ow4r.s:58     .text.device_get_mcu_model:00000000 device_get_mcu_model
+C:\WINDOWS\cc94ow4r.s:72     .text.device_get_mcu_model:00000004 $d
+C:\WINDOWS\cc94ow4r.s:77     .text.device_get_fw_version:00000000 $t
+C:\WINDOWS\cc94ow4r.s:83     .text.device_get_fw_version:00000000 device_get_fw_version
+C:\WINDOWS\cc94ow4r.s:126    .text.device_get_serial:00000000 $t
+C:\WINDOWS\cc94ow4r.s:132    .text.device_get_serial:00000000 device_get_serial
+C:\WINDOWS\cc94ow4r.s:157    .text.device_get_serial:00000014 $d
+C:\WINDOWS\cc94ow4r.s:162    .rodata.device_get_info.str1.4:00000000 $d
+C:\WINDOWS\cc94ow4r.s:166    .text.device_get_info:00000000 $t
+C:\WINDOWS\cc94ow4r.s:172    .text.device_get_info:00000000 device_get_info
+C:\WINDOWS\cc94ow4r.s:231    .text.device_get_info:00000034 $d
+C:\WINDOWS\cc94ow4r.s:237    .text.device_get_capabilities:00000000 $t
+C:\WINDOWS\cc94ow4r.s:243    .text.device_get_capabilities:00000000 device_get_capabilities
+C:\WINDOWS\cc94ow4r.s:289    .text.device_get_capabilities:00000028 $d
+C:\WINDOWS\cc94ow4r.s:294    .text.device_get_uptime_ms:00000000 $t
+C:\WINDOWS\cc94ow4r.s:300    .text.device_get_uptime_ms:00000000 device_get_uptime_ms
+C:\WINDOWS\cc94ow4r.s:316    .text.device_get_uptime_ms:00000008 $d
+C:\WINDOWS\cc94ow4r.s:321    .text.device_get_uptime_us:00000000 $t
+C:\WINDOWS\cc94ow4r.s:327    .text.device_get_uptime_us:00000000 device_get_uptime_us
+C:\WINDOWS\cc94ow4r.s:344    .text.device_soft_reset:00000000 $t
+C:\WINDOWS\cc94ow4r.s:350    .text.device_soft_reset:00000000 device_soft_reset
+C:\WINDOWS\cc94ow4r.s:406    .text.device_soft_reset:00000018 $d
+C:\WINDOWS\cc94ow4r.s:412    .bss.g_uptime_ms:00000000 $d
+C:\WINDOWS\cc94ow4r.s:416    .bss.g_uptime_ms:00000000 g_uptime_ms
+
+UNDEFINED SYMBOLS
+memset
+strncpy

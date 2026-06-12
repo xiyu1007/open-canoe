@@ -26,7 +26,7 @@ import json
 import glob
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-HW_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "hardware")
+HW_DIR = os.path.join(os.path.dirname(SCRIPT_DIR), "firmware")
 ST_FLASH = os.path.join(
     os.path.dirname(SCRIPT_DIR), "assert",
     "stlink-1.7.0-x86_64-w64-mingw32",
