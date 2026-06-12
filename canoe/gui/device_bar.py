@@ -50,7 +50,7 @@ class DeviceBar(ttk.Frame):
         ttk.Button(pf, text="⟳", width=3, command=self._refresh_ports).grid(row=0, column=1, padx=(4, 0))
 
         sec(L_["connection"], r); r += 1
-        row = ttk.Frame(self); row.grid(row=r, column=0, sticky=tk.EW, pady=(4, 8)); r += 1
+        row = ttk.Frame(self, style="Card.TFrame"); row.grid(row=r, column=0, sticky=tk.EW, pady=(4, 8)); r += 1
         self._dot = tk.Canvas(row, width=12, height=12, highlightthickness=0, bg=CARD)
         self._dot.pack(side=tk.LEFT, padx=(0, 6))
         self._dot.create_oval(2, 2, 10, 10, fill=SECONDARY, outline="")

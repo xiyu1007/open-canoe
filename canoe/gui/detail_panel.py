@@ -17,21 +17,19 @@ class DetailPanel(ttk.Frame):
     def _build(self) -> None:
         L_ = L()
         self.columnconfigure(0, weight=1); self.columnconfigure(1, weight=1)
-        self.rowconfigure(0, weight=0); self.rowconfigure(2, weight=1)
+        self.rowconfigure(1, weight=1)
 
-        ttk.Label(self, text=L_["detail"], font=FONT_SECTION,
-                  foreground=PRIMARY).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=(0, 4))
         ttk.Label(self, text=L_["raw_msg"], font=FONT_SECTION,
-                  foreground=SECONDARY).grid(row=1, column=0, sticky=tk.W)
+                  foreground=SECONDARY).grid(row=0, column=0, sticky=tk.W, pady=(0, 4))
         ttk.Label(self, text=L_["decoded"], font=FONT_SECTION,
-                  foreground=SECONDARY).grid(row=1, column=1, sticky=tk.W)
+                  foreground=SECONDARY).grid(row=0, column=1, sticky=tk.W, pady=(0, 4))
 
-        self._raw = tk.Text(self, height=5, font=FONT_MONO_9, bg="#f8fafc",
+        self._raw = tk.Text(self, height=5, font=FONT_BODY, bg="#f8fafc",
                             fg=PRIMARY, relief="flat", borderwidth=0, state=tk.DISABLED)
-        self._raw.grid(row=2, column=0, sticky="nsew", padx=(0, 8), pady=(2, 0))
-        self._dec = tk.Text(self, height=5, font=FONT_MONO_9, bg="#f8fafc",
+        self._raw.grid(row=1, column=0, sticky="nsew", padx=(0, 8), pady=(2, 0))
+        self._dec = tk.Text(self, height=5, font=FONT_BODY, bg="#f8fafc",
                             fg=PRIMARY, relief="flat", borderwidth=0, state=tk.DISABLED)
-        self._dec.grid(row=2, column=1, sticky="nsew", padx=(8, 0), pady=(2, 0))
+        self._dec.grid(row=1, column=1, sticky="nsew", padx=(8, 0), pady=(2, 0))
 
     def show(self, msg: CANMessage) -> None:
         L_ = L()
