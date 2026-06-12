@@ -33,7 +33,6 @@ class WaveformWindow(tk.Toplevel):
                      state="readonly", width=10).grid(row=0, column=4, padx=(0, 10))
         self._btn = ttk.Button(tb, text=L_["wave_cap"], command=self._toggle)
         self._btn.grid(row=0, column=5, padx=4)
-        ttk.Button(tb, text=L_["wave_stop"], command=self._stop).grid(row=0, column=6, padx=4)
         self._st = ttk.Label(tb, text=L_["wave_idle"], foreground=SECONDARY)
         self._st.grid(row=0, column=7, padx=(10, 0))
 

@@ -75,13 +75,12 @@ class MainWindow:
         tf.pack(fill=tk.X, pady=(0, 8))
         ttk.Label(tf, text=L_["title"], style="Title.TLabel").pack(side=tk.LEFT)
 
-        self._main = ttk.Frame(outer)
-        self._main.pack(fill=tk.BOTH, expand=True)
-        self._main.columnconfigure(1, weight=1)
-        self._main.rowconfigure(0, weight=1)
+        # 可拖动主区域
+        self._pane = ttk.PanedWindow(outer, orient=tk.HORIZONTAL)
+        self._pane.pack(fill=tk.BOTH, expand=True)
 
         # 左栏
-        self._frame_left = ttk.Frame(self._main)
+        self._frame_left = ttk.Frame(self._pane)
         self._card_left = ttk.Frame(self._frame_left, style="Card.TFrame", padding=14)
         self._card_left.pack(fill=tk.BOTH, expand=True)
         self._dev = DeviceBar(
@@ -92,9 +91,10 @@ class MainWindow:
             on_flash=self._flash_dialog,
         )
         self._dev.pack(fill=tk.BOTH, expand=True)
+        self._pane.add(self._frame_left, weight=0)
 
         # 中栏
-        self._frame_ctr = ttk.Frame(self._main)
+        self._frame_ctr = ttk.Frame(self._pane)
         self._frame_ctr.rowconfigure(0, weight=1)
 
         self._card_trace = ttk.Frame(self._frame_ctr, style="Card.TFrame", padding=14)
@@ -107,13 +107,15 @@ class MainWindow:
         self._card_det.pack(fill=tk.BOTH, expand=True)
         self._det = DetailPanel(self._card_det)
         self._det.pack(fill=tk.BOTH, expand=True)
+        self._pane.add(self._frame_ctr, weight=1)
 
         # 右栏
-        self._frame_right = ttk.Frame(self._main)
+        self._frame_right = ttk.Frame(self._pane)
         self._card_right = ttk.Frame(self._frame_right, style="Card.TFrame", padding=14)
         self._card_right.pack(fill=tk.BOTH, expand=True)
         self._snd = SendPanel(self._card_right, on_send=self._on_send, on_filter=self._on_filter)
         self._snd.pack(fill=tk.BOTH, expand=True)
+        self._pane.add(self._frame_right, weight=0)
 
         # 日志
         self._frame_log = ttk.Frame(outer)
@@ -136,14 +138,15 @@ class MainWindow:
         self._relayout()
 
     def _relayout(self) -> None:
-        for w in (self._frame_left, self._frame_ctr, self._frame_right):
-            w.grid_forget()
+        # 清空 pane
+        for w in self._pane.panes():
+            self._pane.forget(w)
 
         if self._v_left.get():
-            self._frame_left.grid(row=0, column=0, sticky="nsew", padx=(0, 6))
-        self._frame_ctr.grid(row=0, column=1, sticky="nsew")
+            self._pane.add(self._frame_left, weight=0)
+        self._pane.add(self._frame_ctr, weight=1)
         if self._v_right.get():
-            self._frame_right.grid(row=0, column=2, sticky="ns", padx=(6, 0))
+            self._pane.add(self._frame_right, weight=0)
 
         if self._v_detail.get():
             self._card_trace.pack(fill=tk.BOTH, expand=True, pady=(0, 4))
@@ -180,8 +183,11 @@ class MainWindow:
         mb.add_cascade(label=L_["menu_view"], menu=vm)
         sm = tk.Menu(mb, tearoff=0)
         lm = tk.Menu(sm, tearoff=0)
-        lm.add_radiobutton(label="中文", command=lambda: self._switch_lang("ZH"))
-        lm.add_radiobutton(label="English", command=lambda: self._switch_lang("EN"))
+        self._lang_var = tk.StringVar(value=lang_code())
+        lm.add_radiobutton(label="中文", variable=self._lang_var, value="ZH",
+                           command=lambda: self._switch_lang("ZH"))
+        lm.add_radiobutton(label="English", variable=self._lang_var, value="EN",
+                           command=lambda: self._switch_lang("EN"))
         sm.add_cascade(label=L_["menu_lang"], menu=lm)
         mb.add_cascade(label=L_["menu_settings"], menu=sm)
         hm = tk.Menu(mb, tearoff=0)
@@ -246,6 +252,8 @@ class MainWindow:
 
     def _on_send(self, msg: CANMessage) -> None:
         self._tbl.add(msg)
+        if msg.is_error:
+            self._log.log(f"发送错误帧", "err")
         if self._tr and self._tr.is_connected:
             try:
                 self._tr.write(encode(Command.CAN_SEND, msg.data))

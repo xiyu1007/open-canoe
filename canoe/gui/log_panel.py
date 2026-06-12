@@ -17,6 +17,7 @@ class LogPanel(ttk.Frame):
         hdr = ttk.Frame(self)
         hdr.pack(fill=tk.X)
         ttk.Label(hdr, text=L()["log"], font=FONT_SECTION, foreground=PRIMARY).pack(side=tk.LEFT)
+        ttk.Button(hdr, text=L()["clear"], command=self.clear, width=7).pack(side=tk.RIGHT)
 
         tf = ttk.Frame(self); tf.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
         self._text = tk.Text(tf, height=4, font=FONT_MONO_9, bg="#f8fafc",

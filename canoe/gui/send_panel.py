@@ -54,12 +54,10 @@ class SendPanel(ttk.Frame):
         ttk.Entry(self, textvariable=self._data_var, font=FONT_BODY).grid(
             row=r, column=0, sticky=tk.EW, pady=(0, 8)); r += 1
 
-        bf = ttk.Frame(self); bf.grid(row=r, column=0, sticky=tk.EW); r += 1
-        bf.columnconfigure(0, weight=1); bf.columnconfigure(1, weight=1)
-        ttk.Button(bf, text=L_["send_once"], command=self._send_once).grid(
-            row=0, column=0, sticky=tk.EW, padx=(0, 4))
-        ttk.Button(bf, text=L_["send_err"], command=self._send_err).grid(
-            row=0, column=1, sticky=tk.EW, padx=(4, 0))
+        ttk.Button(self, text=L_["send_once"], command=self._send_once).grid(
+            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        ttk.Button(self, text=L_["send_err"], command=self._send_err).grid(
+            row=r, column=0, sticky=tk.EW); r += 1
 
         s(L_["cycle"], r); r += 1
         b(L_["interval"], r); r += 1
@@ -74,8 +72,12 @@ class SendPanel(ttk.Frame):
 
         s(L_["filter"], r); r += 1
         self._f_id_var = tk.StringVar(value="")
-        ttk.Entry(self, textvariable=self._f_id_var, font=FONT_BODY).grid(
-            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        self._f_id_entry = ttk.Entry(self, textvariable=self._f_id_var, font=FONT_BODY,
+                                     foreground=SECONDARY)
+        self._f_id_entry.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        self._f_id_entry.insert(0, L_["filter_id"])
+        self._f_id_entry.bind("<FocusIn>", self._on_filter_focus_in)
+        self._f_id_entry.bind("<FocusOut>", self._on_filter_focus_out)
         self._f_id_var.trace_add("write", lambda *_: self._apply_filter())
 
         fm = ttk.Frame(self); fm.grid(row=r, column=0, sticky=tk.EW); r += 1
@@ -87,8 +89,19 @@ class SendPanel(ttk.Frame):
         ttk.Radiobutton(fm, text=L_["filter_off"], variable=self._f_mode,
                         value="off", command=self._apply_filter).pack(side=tk.LEFT)
 
+    def _on_filter_focus_in(self, _e) -> None:
+        if self._f_id_var.get() == L()["filter_id"]:
+            self._f_id_var.set("")
+            self._f_id_entry.config(foreground=PRIMARY)
+
+    def _on_filter_focus_out(self, _e) -> None:
+        if not self._f_id_var.get().strip():
+            self._f_id_var.set(L()["filter_id"])
+            self._f_id_entry.config(foreground=SECONDARY)
+
     def _apply_filter(self) -> None:
         raw = self._f_id_var.get().strip()
+        if raw == L()["filter_id"]: raw = ""
         mode = self._f_mode.get()
         ids: set[int] = set()
         if raw and mode != "off":
