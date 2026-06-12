@@ -1,0 +1,12 @@
+transport:
+  preferred: usb_cdc
+  serial_baud: 921600
+  auto_connect: false
+
+can:
+  bitrate: 500000
+  silent_mode: false
+
+ui:
+  theme: light
+  max_log_lines: 100000

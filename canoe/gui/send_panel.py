@@ -1,0 +1,129 @@
+"""发送面板 — 报文编辑、周期发送、OBD-II 预设。"""
+
+from __future__ import annotations
+
+import time, tkinter as tk
+from tkinter import ttk
+from canoe.gui.config import *
+from canoe.gui.lang import L
+from canoe.core.models import CANMessage
+
+
+class SendPanel(ttk.Frame):
+    def __init__(self, parent, *, on_send=None):
+        super().__init__(parent, style="Card.TFrame")
+        self._cb = on_send
+        self._cycling = False; self._cycled = 0
+        self._build()
+
+    def _build(self) -> None:
+        L_ = L()
+        self.columnconfigure(0, weight=1)
+
+        def s(text, row, pady=(12, 4)):
+            ttk.Label(self, text=text, font=FONT_SECTION, foreground=PRIMARY).grid(
+                row=row, column=0, sticky=tk.W, pady=pady)
+        def b(text, row, pady=(0, 2)):
+            ttk.Label(self, text=text, font=FONT_BODY, foreground=SECONDARY).grid(
+                row=row, column=0, sticky=tk.W, pady=pady)
+
+        r = 0
+        s(L_["composer"], r); r += 1
+        b(L_["can_id"], r); r += 1
+        self._id_var = tk.StringVar(value="0x7DF")
+        ttk.Entry(self, textvariable=self._id_var, font=FONT_BODY).grid(
+            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+
+        b(L_["frame_type"], r); r += 1
+        self._tp_var = tk.StringVar(value=L_["std_frame"])
+        ttk.Combobox(self, textvariable=self._tp_var,
+                     values=[L_["std_frame"], L_["ext_frame"]],
+                     state="readonly", font=FONT_BODY).grid(
+            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+
+        b(L_["dlc"], r); r += 1
+        self._dlc_var = tk.StringVar(value="8")
+        ttk.Combobox(self, textvariable=self._dlc_var,
+                     values=[str(i) for i in range(1, 9)],
+                     state="readonly", font=FONT_BODY).grid(
+            row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+
+        b(L_["data_hex"], r); r += 1
+        self._data_var = tk.StringVar(value="02 01 00 00 00 00 00 00")
+        ttk.Entry(self, textvariable=self._data_var, font=FONT_BODY).grid(
+            row=r, column=0, sticky=tk.EW, pady=(0, 8)); r += 1
+
+        bf = ttk.Frame(self); bf.grid(row=r, column=0, sticky=tk.EW); r += 1
+        bf.columnconfigure(0, weight=1); bf.columnconfigure(1, weight=1)
+        ttk.Button(bf, text=L_["send_once"], command=self._send_once).grid(
+            row=0, column=0, sticky=tk.EW, padx=(0, 4))
+        ttk.Button(bf, text=L_["send_err"], command=self._send_err).grid(
+            row=0, column=1, sticky=tk.EW, padx=(4, 0))
+
+        s(L_["cycle"], r); r += 1
+        b(L_["interval"], r); r += 1
+        self._ivl_var = tk.StringVar(value="100")
+        ttk.Entry(self, textvariable=self._ivl_var, font=FONT_BODY, width=8).grid(
+            row=r, column=0, sticky=tk.W, pady=(0, 4)); r += 1
+        self._btn_cyc = ttk.Button(self, text=L_["start_cycle"], command=self._toggle_cycle)
+        self._btn_cyc.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
+        self._cyc_lbl = ttk.Label(self, text=f"{L_['sent']} 0",
+                                  foreground=SECONDARY, font=FONT_BODY)
+        self._cyc_lbl.grid(row=r, column=0, sticky=tk.W); r += 1
+
+        s(L_["presets"], r); r += 1
+        for name, cid, data in [
+            (L_["preset_rpm"],     "0x7DF", "02 01 0C 00 00 00 00 00"),
+            (L_["preset_speed"],   "0x7DF", "02 01 0D 00 00 00 00 00"),
+            (L_["preset_vin"],     "0x7DF", "02 09 02 00 00 00 00 00"),
+            (L_["preset_coolant"], "0x7DF", "02 01 05 00 00 00 00 00"),
+            (L_["preset_tpms"],    "0x601", "03 22 F1 90 00 00 00 00"),
+        ]:
+            ttk.Button(self, text=name,
+                       command=lambda c=cid, d=data: self._preset(c, d)).grid(
+                row=r, column=0, sticky=tk.EW, pady=1); r += 1
+
+    def _send_once(self) -> None:
+        m = self._parse();
+        if m and self._cb: self._cb(m)
+
+    def _send_err(self) -> None:
+        m = CANMessage(0, b"", is_error=True, timestamp_us=int(time.time() * 1_000_000))
+        if self._cb: self._cb(m)
+
+    def _toggle_cycle(self) -> None:
+        L_ = L()
+        if self._cycling:
+            self._cycling = False; self._btn_cyc.config(text=L_["start_cycle"])
+        else:
+            self._cycling = True; self._cycled = 0
+            self._cyc_lbl.config(text=f"{L_['sent']} 0")
+            self._btn_cyc.config(text=L_["stop_cycle"]); self._tick()
+
+    def _tick(self) -> None:
+        if not self._cycling: return
+        m = self._parse()
+        if m and self._cb:
+            self._cb(m); self._cycled += 1
+            self._cyc_lbl.config(text=f"{L()['sent']} {self._cycled}")
+        try: ivl = int(self._ivl_var.get())
+        except ValueError: ivl = 100
+        self.after(ivl, self._tick)
+
+    def stop_cycle(self) -> None:
+        self._cycling = False; self._btn_cyc.config(text=L()["start_cycle"])
+
+    def _parse(self) -> CANMessage | None:
+        try:
+            can_id = int(self._id_var.get().lower().replace("0x", ""), 16)
+            is_ext = "扩展" in self._tp_var.get() or "Extended" in self._tp_var.get()
+            dlc = int(self._dlc_var.get())
+            data = bytes.fromhex(self._data_var.get().replace(" ", ""))
+            data = data[:8].ljust(dlc, b"\x00")[:dlc]
+            return CANMessage(arbitration_id=can_id, data=data, is_extended=is_ext,
+                              timestamp_us=int(time.time() * 1_000_000))
+        except Exception:
+            return None
+
+    def _preset(self, cid: str, data: str) -> None:
+        self._id_var.set(cid); self._data_var.set(data)
