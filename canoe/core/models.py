@@ -13,6 +13,7 @@ class CANMessage:
     data: bytes
     is_extended: bool = False
     is_error: bool = False
+    is_remote: bool = False
     timestamp_us: int = 0
     channel: int = 0
 

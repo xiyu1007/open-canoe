@@ -10,12 +10,13 @@ from canoe.gui.lang import L
 
 class DeviceBar(ttk.Frame):
     def __init__(self, parent, *, on_connect=None, on_disconnect=None,
-                 on_waveform=None, on_flash=None):
+                 on_waveform=None, on_flash=None, on_silent=None):
         super().__init__(parent, style="Card.TFrame")
         self._cb_conn = on_connect
         self._cb_disc = on_disconnect
         self._cb_wave = on_waveform or (lambda: None)
         self._cb_flash = on_flash or (lambda: None)
+        self._cb_silent = on_silent or (lambda v: None)
         self._connected = False
         self._build()
 
@@ -64,7 +65,8 @@ class DeviceBar(ttk.Frame):
                      state="readonly", font=FONT_BODY).grid(
             row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
         self._silent_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(self, text=L_["silent"], variable=self._silent_var).grid(
+        ttk.Checkbutton(self, text=L_["silent"], variable=self._silent_var,
+                        command=lambda: self._cb_silent(self._silent_var.get())).grid(
             row=r, column=0, sticky=tk.W, pady=(0, 8)); r += 1
 
         sec(L_["waveform"], r); r += 1

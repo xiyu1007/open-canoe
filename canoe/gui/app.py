@@ -93,6 +93,7 @@ class MainWindow:
             on_disconnect=self._disconnect,
             on_waveform=self._open_waveform,
             on_flash=self._flash_dialog,
+            on_silent=self._on_silent,
         )
         self._dev.pack(fill=tk.BOTH, expand=True)
         self._h_pane.add(self._frame_left, weight=0)
@@ -225,8 +226,8 @@ class MainWindow:
             self._q.put(("ok", tr))
         except TransportError as e:
             self._q.put(("err", str(e)))
-        except Exception as e:
-            self._q.put(("err", str(e)))
+        except Exception:
+            self._q.put(("err", L()["conn_failed"]))
 
     def _disconnect(self) -> None:
         if self._tr:
@@ -255,19 +256,25 @@ class MainWindow:
             pass
         self.root.after(200, self._poll)
 
+    def _on_silent(self, silent: bool) -> None:
+        self._snd.set_enabled(not silent)
+
     def _on_filter(self, ftype: str, ids: set[int], mode: str) -> None:
         self._tbl.set_filter(ftype, ids, mode)
 
     def _on_send(self, msg: CANMessage) -> None:
-        self._tbl.add(msg)
+        self._tbl.add(msg, is_tx=True)
+        L_ = L()
         if msg.is_error:
-            self._log.log(f"发送错误帧", "err")
+            self._log.log(L_["send_err_log"], "err")
+        elif msg.is_remote:
+            self._log.log(f"{L_['send_rtr_log']} ID={msg.id_str}", "info")
         if self._tr and self._tr.is_connected:
             try:
                 self._tr.write(encode(Command.CAN_SEND, msg.data))
                 self._tbl.stats.record_tx()
             except Exception as e:
-                self._log.log(f"发送失败: {e}", "err")
+                self._log.log(f"{L_['send_fail']}: {e}", "err")
 
     def _on_select(self, _event) -> None:
         sel = self._tbl._tree.selection()
@@ -279,9 +286,21 @@ class MainWindow:
             L_ = L()
             is_ext = vals[3] == L_["type_ext"]
             is_err = vals[3] == L_["type_err"]
-            data = bytes.fromhex(vals[5].replace(" ", ""))
+            data = bytes.fromhex(vals[6].replace(" ", ""))
+            # Parse timestamp from format "HH:MM:SS.mmm"
+            ts_str = vals[1]
+            ts_us = 0
+            try:
+                parts = ts_str.split(".")
+                hms = parts[0].split(":")
+                secs = int(hms[0])*3600 + int(hms[1])*60 + int(hms[2])
+                ms = int(parts[1]) if len(parts) > 1 else 0
+                ts_us = secs * 1_000_000 + ms * 1000
+            except Exception:
+                pass
             self._det.show(CANMessage(
-                arbitration_id=can_id, data=data, is_extended=is_ext, is_error=is_err))
+                arbitration_id=can_id, data=data, is_extended=is_ext, is_error=is_err,
+                timestamp_us=ts_us))
         except Exception:
             pass
 

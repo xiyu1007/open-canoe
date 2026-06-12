@@ -35,18 +35,20 @@ class DetailPanel(ttk.Frame):
         L_ = L()
         dtype = L_["type_ext"] if msg.is_extended else L_["type_std"]
         if msg.is_error: dtype = L_["type_err"]
-        raw = (f"ID:     {msg.id_str}\n"
-               f"类型:   {dtype}\n"
-               f"DLC:    {msg.dlc}\n"
-               f"数据:   {msg.data_str}\n"
-               f"时间戳: {msg.timestamp_us / 1000:.3f} ms")
+        us = msg.timestamp_us
+        ts_str = f"{us//3600000000:02d}:{(us//60000000)%60:02d}:{(us//1000000)%60:02d}.{(us//1000)%1000:03d}"
+        raw = (f"{L_['d_id']}     {msg.id_str}\n"
+               f"{L_['d_type']}   {dtype}\n"
+               f"{L_['d_dlc']}    {msg.dlc}\n"
+               f"{L_['d_data']}   {msg.data_str}\n"
+               f"{L_['d_time']}   {ts_str}")
         self._raw.config(state=tk.NORMAL); self._raw.delete("1.0", tk.END)
         self._raw.insert("1.0", raw); self._raw.config(state=tk.DISABLED)
 
         if msg.is_error:
-            dec = "错误帧 — 无信号数据"
+            dec = L_["d_err"]
         elif msg.dlc == 0:
-            dec = "空帧 (DLC=0)"
+            dec = L_["d_empty"]
         else:
             d = msg.data[:msg.dlc]
             lines = [f"hex: {msg.data_str}"]
