@@ -1,7 +1,10 @@
 # ---------------------------------------------------------------------------
-# Canoe — User Settings
-# Edit values below. Missing keys fall back to defaults in this file.
+# Canoe — Settings
 # ---------------------------------------------------------------------------
+
+app:
+  version: "1.1.0"
+  repo: "https://github.com/xiyu1007/open-canoe"
 
 transport:
   preferred: usb_cdc

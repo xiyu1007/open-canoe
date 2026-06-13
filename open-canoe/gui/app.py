@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import tkinter as tk
+import os, tkinter as tk
 from tkinter import ttk, messagebox
 import threading, queue, time
 
@@ -102,11 +102,9 @@ class MainWindow:
         L_ = L()
         outer = ttk.Frame(self.root, padding=(12, 10))
         outer.pack(fill=tk.BOTH, expand=True)
-
-        tf = ttk.Frame(outer)
-        tf.pack(fill=tk.X, pady=(0, 8))
-        ttk.Label(tf, text=L_["title"], style="Title.TLabel").pack(side=tk.LEFT)
-
+        # tf = ttk.Frame(outer)
+        # tf.pack(fill=tk.X, pady=(0, 8))
+        # ttk.Label(tf, text=L_["title"], style="Title.TLabel").pack(side=tk.LEFT)
         self._v_pane = ttk.PanedWindow(outer, orient=tk.VERTICAL)
         self._v_pane.pack(fill=tk.BOTH, expand=True)
 
@@ -629,7 +627,106 @@ class MainWindow:
         self.root.after(500, self._refresh)
 
     def _clear(self) -> None: self._tbl.clear(); self._log.clear()
-    def _about(self) -> None: messagebox.showinfo(L()["menu_about"], L()["about"])
+    def _about(self) -> None:
+        L_ = L()
+        dlg = tk.Toplevel(self.root)
+        dlg.title(L_["menu_about"])
+        dlg.resizable(False, False)
+        dlg.configure(bg=CARD)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        app_cfg = self.settings.get("app", {})
+        version = app_cfg.get("version", "0.3.0")
+        repo = app_cfg.get("repo", "https://github.com/xiyu1007/open-canoe")
+
+        pad = 24
+        tk.Label(dlg, text=f"open-canoe  v{version}",
+                 font=(FONT_UI, 16, "bold"), bg=CARD, fg=PRIMARY).pack(
+            padx=pad, pady=(pad, 6))
+        tk.Label(dlg, text="Open CAN Bus Analyzer",
+                 font=(FONT_UI, 10), bg=CARD, fg=SECONDARY).pack(pady=(0, 12))
+
+        link_lbl = tk.Label(dlg, text=repo,
+                            font=(FONT_UI, 9, "underline"), bg=CARD,
+                            fg=ACCENT, cursor="hand2")
+        link_lbl.pack(pady=(0, 12))
+        link_lbl.bind("<Button-1>", lambda e: os.startfile(repo))
+
+        desc = ("STM32 硬件探针 + 原生桌面 GUI\n"
+                "USART 二进制协议通信 · 实时 CAN 报文追踪\n"
+                "环回自测 · 周期发送 · 报文过滤 · 历史记录")
+        tk.Label(dlg, text=desc, font=FONT_BODY, bg=CARD, fg=SECONDARY,
+                 justify="center").pack(padx=pad, pady=(0, 16))
+
+        btn_frame = tk.Frame(dlg, bg=CARD)
+        btn_frame.pack(padx=pad, pady=(0, pad))
+        ttk.Button(btn_frame, text="☕ " + L_.get("buy_coffee", "请我喝咖啡"),
+                   command=self._show_sponsor).pack(side=tk.LEFT, padx=(0, 8))
+        ttk.Button(btn_frame, text=L_.get("close", "关闭"),
+                   command=dlg.destroy).pack(side=tk.LEFT)
+
+        dlg.update_idletasks()
+        w, h = dlg.winfo_width(), dlg.winfo_height()
+        x = (dlg.winfo_screenwidth() - w) // 2
+        y = (dlg.winfo_screenheight() - h) // 2
+        dlg.geometry(f"+{x}+{y}")
+
+    def _show_sponsor(self) -> None:
+        _app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sponsor_dir = os.path.join(_app_dir, "attachment")
+        images = []
+        for fname in ["Sponsor-Me.png", "Sponsor-MeAliPay.png"]:
+            path = os.path.join(sponsor_dir, fname)
+            if os.path.exists(path):
+                try:
+                    img = tk.PhotoImage(file=path)
+                    w, h = img.width(), img.height()
+                    scale = max(w, h) / 250
+                    if scale > 1:
+                        img = img.subsample(int(scale), int(scale))
+                    images.append((img, fname))
+                except Exception:
+                    pass
+
+        if not images:
+            messagebox.showinfo("提示", "收款码图片未找到。", parent=self.root)
+            return
+
+        dlg = tk.Toplevel(self.root)
+        dlg.title("☕ 请我喝咖啡")
+        dlg.resizable(False, False)
+        dlg.configure(bg=CARD)
+        dlg.transient(self.root)
+        dlg.grab_set()
+
+        pad, gap = 16, 12
+        tk.Label(dlg, text="扫一扫，请我喝杯咖啡",
+                 font=(FONT_UI, 13, "bold"), bg=CARD, fg=PRIMARY).pack(pady=(pad, 4))
+        tk.Label(dlg, text="感谢支持！",
+                 font=FONT_BODY, bg=CARD, fg=SECONDARY).pack(pady=(0, pad))
+
+        img_frame = tk.Frame(dlg, bg=CARD)
+        img_frame.pack(padx=pad)
+        for img, name in images:
+            card = tk.Frame(img_frame, bg="#f8fafc")
+            card.pack(side=tk.LEFT, padx=gap // 2)
+            lbl = tk.Label(card, image=img, bg="#f8fafc")
+            lbl.image = img
+            lbl.pack(padx=12, pady=12)
+            label_text = "微信" if "WeChat" in name or "Sponsor-Me" == name.replace(".png","") else "支付宝"
+            if "AliPay" in name:
+                label_text = "支付宝"
+            tk.Label(card, text=label_text, font=FONT_HINT,
+                     bg="#f8fafc", fg=SECONDARY).pack(pady=(0, 8))
+
+        ttk.Button(dlg, text="关闭", command=dlg.destroy).pack(pady=(pad, pad))
+
+        dlg.update_idletasks()
+        w, h = dlg.winfo_width(), dlg.winfo_height()
+        x = (dlg.winfo_screenwidth() - w) // 2
+        y = (dlg.winfo_screenheight() - h) // 2
+        dlg.geometry(f"+{x}+{y}")
 
     def _center(self) -> None:
         self.root.update_idletasks()
