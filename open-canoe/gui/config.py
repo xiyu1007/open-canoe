@@ -9,7 +9,6 @@ __all__ = [
     "FONT_UI", "FONT_TITLE", "FONT_SECTION", "FONT_BODY", "FONT_HINT", "FONT_MONO_9",
     "XPAD", "YPAD", "CARD_PAD", "BITRATES", "MCU_TARGETS",
     "MAX_VISIBLE", "MESSAGE_LIMIT", "HISTORY_DIR_NAME", "APP_DATA_DIR",
-    "MAX_HISTORY_FILES",
 ]
 
 BG = "#e8ecf1"
@@ -64,7 +63,6 @@ MCU_TARGETS = ["STM32F103C8T6", "STM32F407VET6"]
 MAX_VISIBLE = 20_000       # max tree items before capping
 MESSAGE_LIMIT = 2_000       # default max in-memory messages before offload
 HISTORY_DIR_NAME = ""  # history CSV goes directly in APP_DATA_DIR (data/)
-MAX_HISTORY_FILES = 2  # keep only N most recent history CSV files
 
 # ---------------------------------------------------------------------------
 # App data directory — project-local (open-canoe/), not user AppData

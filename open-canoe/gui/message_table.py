@@ -126,18 +126,18 @@ class MessageTable(ttk.Frame):
         self._saved.clear(); self._collapse_cache.clear(); self._cnt = 0
         self._lbl.config(text=f"0/{self._msg_limit} {L()['msgs']}")
 
-    def _rebuild(self) -> None:
+    def _rebuild(self, restore_sel: bool = True) -> None:
         scroll_pos = self._tree.yview()
-        # Save selection keys to restore after rebuild (collapsed mode loses selection)
         sel_keys: set[tuple] = set()
-        for item in self._tree.selection():
-            v = self._tree.item(item, "values")
-            if v:
-                can_id = int(v[2].replace("0x", ""), 16)
-                is_tx = v[5] == "TX"
-                is_remote = "RTR" in str(v[3])
-                is_ext = v[3] in ("扩展", "EXT", "RTR EXT")
-                sel_keys.add((can_id, is_tx, is_remote, is_ext))
+        if restore_sel:
+            for item in self._tree.selection():
+                v = self._tree.item(item, "values")
+                if v:
+                    can_id = int(v[2].replace("0x", ""), 16)
+                    is_tx = v[5] == "TX"
+                    is_remote = "RTR" in str(v[3])
+                    is_ext = v[3] in ("扩展", "EXT", "RTR EXT")
+                    sel_keys.add((can_id, is_tx, is_remote, is_ext))
         self._tree.delete(*self._tree.get_children())
         self._cnt = 0
         if self._collapsed:
@@ -222,8 +222,7 @@ class MessageTable(ttk.Frame):
                         if msg.arbitration_id == can_id and tss == ts_str:
                             self._saved.pop(i)
                             break
-        self._rebuild()
-        # Restore scroll position, clear selection (Bug #1)
+        self._rebuild(restore_sel=False)
         if scroll_pos and scroll_pos[0] > 0:
             self._tree.yview_moveto(scroll_pos[0])
 
@@ -254,10 +253,7 @@ class MessageTable(ttk.Frame):
             return
         os.makedirs(_HISTORY_DIR, exist_ok=True)
         if not self._history_file:
-            self._history_file = os.path.join(
-                _HISTORY_DIR,
-                f"canoe_msg_{time.strftime('%Y%m%d_%H%M%S')}.csv"
-            )
+            self._history_file = os.path.join(_HISTORY_DIR, "canoe_live.csv")
         # Remove oldest half for performance
         cutoff = len(self._saved) - max(limit // 2, 1)
         to_offload = self._saved[:cutoff]
@@ -266,10 +262,9 @@ class MessageTable(ttk.Frame):
         for msg, is_tx, ts in self._saved:
             key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
             self._collapse_cache[key] = (msg, is_tx, ts)
-        # Append to session CSV (accumulates all offloaded messages)
-        write_header = not os.path.exists(self._history_file)
+        # Overwrite live CSV with current offloaded batch (no accumulation, no junk)
         try:
-            with open(self._history_file, "a", newline="", encoding="utf-8") as fh:
+            with open(self._history_file, "w", newline="", encoding="utf-8") as fh:
                 w = csv.writer(fh)
                 for i, (msg, is_tx, ts) in enumerate(to_offload):
                     txrx = "TX" if is_tx else "RX"
@@ -283,8 +278,6 @@ class MessageTable(ttk.Frame):
                                 str(msg.dlc), txrx, msg.data_str])
         except Exception:
             pass
-        # Rotate: keep only the 2 most recent CSV files
-        self._rotate_history()
         if not self._collapsed:
             self._rebuild()
 
@@ -306,20 +299,6 @@ class MessageTable(ttk.Frame):
                     elif msg.is_extended: dt = "EXT"
                     else: dt = "STD"
                     w.writerow([ts, msg.id_str, dt, str(msg.dlc), txrx, msg.data_str])
-        except Exception:
-            pass
-        self._rotate_history()
-
-    def _rotate_history(self) -> None:
-        """Keep only the 2 most recent history CSV files (live + snapshots)."""
-        try:
-            files = sorted(
-                [os.path.join(_HISTORY_DIR, f) for f in os.listdir(_HISTORY_DIR)
-                 if f.startswith("canoe_") and f.endswith(".csv")],
-                key=os.path.getmtime, reverse=True
-            )
-            for old in files[_MAX_HISTORY_FILES:]:
-                os.remove(old)
         except Exception:
             pass
 
