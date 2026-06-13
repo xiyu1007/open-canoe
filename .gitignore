@@ -27,6 +27,7 @@ firmware/build_f407/
 __pycache__/
 *.pyc
 *.pyo
+uv.lock
 
 # IDE / editor
 .vscode/
@@ -49,6 +50,7 @@ assert/
 app/settings.json
 app/can_presets.json
 app/test/TEST_REPORT.md
+open-canoe/data/*.csv
 
 # CubeMX reference demos (source of truth, not source code)
 STM32F103C8T6/
