@@ -30,6 +30,12 @@ if os.path.isdir(fw_dir):
             shutil.rmtree(p, ignore_errors=True)
             removed.append(p)
 
+# uv lock file
+lock_file = os.path.join(PROJECT_DIR, "open-canoe", "uv.lock")
+if os.path.isfile(lock_file):
+    os.remove(lock_file)
+    removed.append(lock_file)
+
 # History CSV files
 data_dir = os.path.join(PROJECT_DIR, "open-canoe", "data")
 if os.path.isdir(data_dir):
