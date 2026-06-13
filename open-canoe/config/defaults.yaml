@@ -1,13 +1,13 @@
 # ---------------------------------------------------------------------------
 # Canoe — User Settings
-# Edit values below. Missing keys fall back to canoe/config/defaults.yaml.
+# Edit values below. Missing keys fall back to defaults in this file.
 # ---------------------------------------------------------------------------
 
 transport:
-  preferred: usb_cdc       # usb_cdc | serial
+  preferred: usb_cdc
   serial_baud: 115200
-  auto_connect: false      # connect automatically on startup
-  vid: 0x0483              # STM32 USB vendor ID
+  auto_connect: false
+  vid: 0x0483
   pid: 0x5740
 
 can:

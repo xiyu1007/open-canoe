@@ -6,7 +6,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import threading, queue, time
 
-from config.settings import load_settings
+from gui.config import load_config
 from core.models import CANMessage
 from core.transport import (
     SerialTransport,
@@ -49,7 +49,7 @@ from gui.waveform_window import WaveformWindow
 class MainWindow:
     def __init__(self):
         self.root = tk.Tk()
-        self.settings = load_settings()
+        self.settings = load_config()
         self._tr = None
         self._wave = None
         self._q: queue.Queue = queue.Queue()
@@ -137,8 +137,8 @@ class MainWindow:
         self._card_trace.pack(fill=tk.BOTH, expand=True)
         self._card_trace.rowconfigure(0, weight=1); self._card_trace.columnconfigure(0, weight=1)
         self._hist_win = None
-        self._tbl = MessageTable(self._card_trace, max_rows=self.settings.ui.max_log_lines,
-                                 message_limit=self.settings.ui.message_limit,
+        self._tbl = MessageTable(self._card_trace, max_rows=self.settings.get("ui", {}).get("max_log_lines", 100000),
+                                 message_limit=self.settings.get("ui", {}).get("message_limit", 2000),
                                  on_open_history=self._toggle_history)
         self._tbl.pack(fill=tk.BOTH, expand=True)
         self._ctr_pane.add(self._frame_trace, weight=1)
@@ -282,7 +282,7 @@ class MainWindow:
         try:
             tr, hb = detect_and_connect(
                 port=port if port.upper() != "AUTO" else None,
-                baudrate=self.settings.transport.serial_baud,
+                baudrate=self.settings.get("transport", {}).get("serial_baud", 115200),
             )
             self._q.put(("ok", tr, hb))
         except TransportError as e:

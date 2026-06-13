@@ -243,9 +243,8 @@ EN = {
 }
 
 import os, json
-from gui.config import APP_DATA_DIR
-
-_LANG_FILE = os.path.join(APP_DATA_DIR, ".lang")
+_LANG_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "config", ".lang")
 
 def _load_lang() -> dict:
     try:

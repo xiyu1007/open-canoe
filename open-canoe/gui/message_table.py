@@ -8,7 +8,7 @@ from gui.config import *
 from gui.lang import L
 from core.models import CANMessage, BusStatistics
 
-_HISTORY_DIR = os.path.join(APP_DATA_DIR, HISTORY_DIR_NAME)
+_HISTORY_DIR = APP_DATA_DIR
 
 
 class MessageTable(ttk.Frame):
