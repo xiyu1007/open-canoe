@@ -8,6 +8,8 @@ from gui.config import *
 from gui.lang import L
 from core.models import CANMessage, BusStatistics
 
+MAX_VISIBLE = 20_000  # cap tree items to prevent freeze on collapse/expand
+
 
 class MessageTable(ttk.Frame):
     def __init__(self, parent, max_rows=100_000):
@@ -19,6 +21,8 @@ class MessageTable(ttk.Frame):
         self._show_tx = False; self._show_rx = False
         self._collapsed = False
         self._saved: list[tuple[CANMessage, bool, str]] = []  # (msg, is_tx, timestamp)
+        # Incremental collapse cache: key -> (msg, is_tx, ts)
+        self._collapse_cache: dict[tuple, tuple] = {}
         self._build()
 
     def _build(self) -> None:
@@ -71,11 +75,17 @@ class MessageTable(ttk.Frame):
         if self._f_msg_mode == "hide" and msg.arbitration_id in self._f_msg: return
         ts = time.strftime("%H:%M:%S") + f".{int(time.time()*1000)%1000:03d}"
         self._saved.append((msg, is_tx, ts))
+        # Update collapse cache incrementally (avoids O(n) scan on rebuild)
         if self._collapsed:
+            key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
+            self._collapse_cache[key] = (msg, is_tx, ts)
             self._rebuild()
         else:
+            # Only auto-scroll if user is at/near the bottom (Bug #2 fix)
+            at_bottom = self._tree.yview()[1] >= 0.95 if self._tree.get_children() else True
             self._insert_one(msg, is_tx, ts)
-            self._tree.yview_moveto(1.0)
+            if at_bottom:
+                self._tree.yview_moveto(1.0)
         if msg.is_error: self._stats.record_error()
         else: self._stats.record_rx()
         self._lbl.config(text=f"{self._cnt} {L()['msgs']}")
@@ -100,43 +110,29 @@ class MessageTable(ttk.Frame):
 
     def clear(self) -> None:
         self._tree.delete(*self._tree.get_children())
-        self._saved.clear(); self._cnt = 0
+        self._saved.clear(); self._collapse_cache.clear(); self._cnt = 0
         self._lbl.config(text=f"0 {L()['msgs']}")
 
-    def _rebuild(self, restore_sel: bool = True) -> None:
+    def _rebuild(self) -> None:
         scroll_pos = self._tree.yview()
-        sel_keys: set[tuple] = set()
-        if restore_sel:
-            for sel in self._tree.selection():
-                v = self._tree.item(sel, "values")
-                if v:
-                    can_id = int(v[2].replace("0x",""), 16)
-                    is_ext = v[3] in ("扩展", "EXT", "RTR EXT")
-                    is_remote = "RTR" in v[3]
-                    is_tx = v[5] == "TX"
-                    sel_keys.add((can_id, is_tx, is_remote, is_ext))
         self._tree.delete(*self._tree.get_children())
         self._cnt = 0
-        items = self._saved
         if self._collapsed:
-            seen: dict[tuple, tuple] = {}
-            for msg, is_tx, ts in self._saved:
-                key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
-                seen[key] = (msg, is_tx, ts)
-            items = list(seen.values())
+            # Use pre-built collapse cache (O(1)), not O(n) scan of _saved
+            items = list(self._collapse_cache.values())
+        else:
+            items = self._saved
+        # Cap visible items to prevent freeze (Bug #3)
+        total = len(items)
+        if total > MAX_VISIBLE:
+            items = items[-MAX_VISIBLE:]
         for msg, is_tx, ts in items:
             self._insert_one(msg, is_tx, ts)
-        self._lbl.config(text=f"{self._cnt} {L()['msgs']}")
+        self._lbl.config(text=f"{self._cnt} {L()['msgs']}"
+                          + (f" (/{total})" if total > MAX_VISIBLE else ""))
+        # Restore scroll position (Bug #1: don't auto-scroll to bottom)
         if scroll_pos and scroll_pos[0] > 0:
             self._tree.yview_moveto(scroll_pos[0])
-        if sel_keys:
-            for item in self._tree.get_children():
-                v = self._tree.item(item, "values")
-                if v:
-                    k = (int(v[2].replace("0x",""), 16), v[5]=="TX", "RTR" in v[3],
-                         v[3] in ("扩展","EXT","RTR EXT"))
-                    if k in sel_keys:
-                        self._tree.selection_set(item)
 
     def _toggle_tx(self) -> None:
         if self._show_tx:
@@ -169,6 +165,7 @@ class MessageTable(ttk.Frame):
     def _delete_selected(self) -> None:
         sel = list(self._tree.selection())
         if not sel: return
+        scroll_pos = self._tree.yview()
         if self._collapsed:
             keys: set[tuple] = set()
             for item in sel:
@@ -181,17 +178,22 @@ class MessageTable(ttk.Frame):
                     keys.add((can_id, is_tx, is_remote, is_ext))
             self._saved = [m for m in self._saved
                            if (m[0].arbitration_id, m[1], m[0].is_remote, m[0].is_extended) not in keys]
+            for k in keys:
+                self._collapse_cache.pop(k, None)
         else:
             for item in sel:
                 v = self._tree.item(item, "values")
                 if v:
                     can_id = int(v[2].replace("0x",""), 16)
-                    ts = v[1]
+                    ts_str = v[1]
                     for i, (msg, is_tx, tss) in enumerate(self._saved):
-                        if msg.arbitration_id == can_id and tss == ts:
+                        if msg.arbitration_id == can_id and tss == ts_str:
                             self._saved.pop(i)
                             break
         self._rebuild()
+        # Restore scroll position, clear selection (Bug #1)
+        if scroll_pos and scroll_pos[0] > 0:
+            self._tree.yview_moveto(scroll_pos[0])
 
     def _toggle_collapse(self) -> None:
         self._collapsed = not self._collapsed
@@ -218,9 +220,17 @@ class MessageTable(ttk.Frame):
         self.clipboard_append("\n".join(lines))
 
     def _prune(self) -> None:
+        # Prune _saved if it exceeds max (collapsed mode has few tree items)
+        overflow = len(self._saved) - self._max
+        if overflow > 0:
+            self._saved = self._saved[-self._max:]
+            self._collapse_cache.clear()
+            for msg, is_tx, ts in self._saved:
+                key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
+                self._collapse_cache[key] = (msg, is_tx, ts)
+        # Prune tree items
         kids = self._tree.get_children()
         n = len(kids) - self._max
         if n > 0:
             for i in kids[:n]: self._tree.delete(i)
             self._cnt -= n
-            self._saved = self._saved[-self._max:]
