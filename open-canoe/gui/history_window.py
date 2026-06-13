@@ -136,8 +136,12 @@ class HistoryWindow(tk.Toplevel):
         """Export filtered rows to a CSV file."""
         from tkinter import filedialog
         path = filedialog.asksaveasfilename(
+            parent=self,
             defaultextension=".csv", filetypes=[("CSV", "*.csv")],
             initialfile=f"canoe_export_{__import__('time').strftime('%Y%m%d_%H%M%S')}.csv")
+        # Bring history window back to front after file dialog closes
+        self.lift()
+        self.focus_force()
         if not path:
             return
         try:
