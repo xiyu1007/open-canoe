@@ -110,9 +110,11 @@ uv venv && uv pip install pyserial
 
 ```
 canoe/
-├── SPECIFICATION.md              # Canonical development specification (read first!)
-├── CLAUDE.md                     # AI assistant guidance
-├── README.md                     # This file
+├── CLAUDE.md                     # AI assistant guidance (at project root)
+├── doc/                          # Documentation
+│   ├── SPECIFICATION.md          # Canonical development specification (read first!)
+│   ├── README.md                 # This file
+│   └── REQUIREMENTS.md           # Test requirements & bug tracker
 │
 ├── open-canoe/                   # Desktop App (Python)
 │   ├── main.py                   # Entry point

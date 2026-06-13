@@ -262,6 +262,8 @@ class MainWindow:
         self._tr = tr
         self._dev_info = hb
         self._dev.set_connected(self._tr.info.port)
+        # Update port dropdown from "auto" to the actual port
+        self._dev._port_var.set(self._tr.info.port)
         model = hb.get("mcu_model", "Unknown")
         fw = hb.get("fw_version", "?")
         self._status_var.set(

@@ -11,7 +11,8 @@ Two components communicate via a binary protocol over USART/USB-CDC:
 - **App**: `open-canoe/` — Python desktop GUI
 - **Firmware**: `firmware/` — C/STM32 HAL hardware probe
 
-The authoritative development specification is [SPECIFICATION.md](SPECIFICATION.md). Read it first.
+The authoritative development specification is [doc/SPECIFICATION.md](doc/SPECIFICATION.md). Read it first.
+The test requirements document is [doc/REQUIREMENTS.md](doc/REQUIREMENTS.md).
 
 ## Quick Reference
 
@@ -99,7 +100,7 @@ uv run python ../test_gui_full.py
 uv run python ../test_ui_controls.py
 ```
 
-**REQUIREMENTS.md** is the authoritative test specification. Read it before modifying any firmware or App logic. It contains:
+**doc/REQUIREMENTS.md** is the authoritative test specification. Read it before modifying any firmware or App logic. It contains:
 - 30+ historical bugs with root cause analysis
 - Complete UI control test checklist (every button/checkbox/dropdown)
 - Cross-module testing rules
@@ -116,7 +117,7 @@ uv run python ../test_ui_controls.py
 
 ### Communication Protocol
 
-Binary framed protocol. Canonical definition in [SPECIFICATION.md](SPECIFICATION.md) §3.
+Binary framed protocol. Canonical definition in [doc/SPECIFICATION.md](doc/SPECIFICATION.md) §3.
 
 ```
 Frame: Magic(0xA5) + Length(LE16) + Cmd(1B) + Seq(LE16) + Data(0..256B) + CRC16(LE16) + EndMagic(0x5A)

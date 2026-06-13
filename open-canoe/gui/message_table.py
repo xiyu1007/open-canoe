@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import time, tkinter as tk
+import csv, os, time, tkinter as tk
 from tkinter import ttk
 from gui.config import *
 from gui.lang import L
 from core.models import CANMessage, BusStatistics
 
 MAX_VISIBLE = 20_000  # cap tree items to prevent freeze on collapse/expand
+OFFLOAD_KEEP = 1_000  # keep most recent N messages in memory after offload
+
+_HISTORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "history")
 
 
 class MessageTable(ttk.Frame):
@@ -21,8 +24,8 @@ class MessageTable(ttk.Frame):
         self._show_tx = False; self._show_rx = False
         self._collapsed = False
         self._saved: list[tuple[CANMessage, bool, str]] = []  # (msg, is_tx, timestamp)
-        # Incremental collapse cache: key -> (msg, is_tx, ts)
         self._collapse_cache: dict[tuple, tuple] = {}
+        self._history_file: str = ""  # path to current history CSV
         self._build()
 
     def _build(self) -> None:
@@ -38,6 +41,8 @@ class MessageTable(ttk.Frame):
         ttk.Button(hdr, text=L_["delete"], command=self._delete_selected, width=8).pack(side=tk.LEFT, padx=2)
         self._btn_collapse = ttk.Button(hdr, text="≡", command=self._toggle_collapse, width=3)
         self._btn_collapse.pack(side=tk.LEFT, padx=2)
+        self._btn_hist = ttk.Button(hdr, text=L_.get("history", "Hist"), command=self._open_history, width=5)
+        self._btn_hist.pack(side=tk.LEFT, padx=2)
         self._s_tx = ttk.Style(); self._s_tx.configure("TX.TButton", font=FONT_BODY)
         self._s_rx = ttk.Style(); self._s_rx.configure("RX.TButton", font=FONT_BODY)
         self._btn_tx = ttk.Button(hdr, text="TX", command=self._toggle_tx, width=4, style="TX.TButton")
@@ -89,6 +94,7 @@ class MessageTable(ttk.Frame):
         if msg.is_error: self._stats.record_error()
         else: self._stats.record_rx()
         self._lbl.config(text=f"{self._cnt} {L()['msgs']}")
+        self._offload_check()
         self._prune()
 
     def _insert_one(self, msg: CANMessage, is_tx: bool, ts: str = "") -> None:
@@ -218,6 +224,48 @@ class MessageTable(ttk.Frame):
         self._collapsed = not self._collapsed
         self._btn_collapse.config(text="-" if self._collapsed else "≡")
         self._rebuild()
+
+    def _offload_check(self) -> None:
+        """Offload oldest messages to CSV when in-memory count exceeds threshold."""
+        if len(self._saved) <= OFFLOAD_KEEP * 2:
+            return
+        os.makedirs(_HISTORY_DIR, exist_ok=True)
+        if not self._history_file:
+            self._history_file = os.path.join(
+                _HISTORY_DIR,
+                f"canoe_msg_{time.strftime('%Y%m%d_%H%M%S')}.csv"
+            )
+        # Offload the oldest half
+        cutoff = len(self._saved) - OFFLOAD_KEEP
+        to_offload = self._saved[:cutoff]
+        self._saved = self._saved[cutoff:]
+        # Rebuild collapse cache from remaining
+        self._collapse_cache.clear()
+        for msg, is_tx, ts in self._saved:
+            key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
+            self._collapse_cache[key] = (msg, is_tx, ts)
+        # Append to CSV
+        write_header = not os.path.exists(self._history_file)
+        try:
+            with open(self._history_file, "a", newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                if write_header:
+                    L_ = L()
+                    w.writerow([L_["col_no"], L_["col_time"], L_["col_id"],
+                                L_["col_type"], L_["col_dlc"], L_["col_ch"], L_["col_data"]])
+                seq = 0
+                for msg, is_tx, ts in to_offload:
+                    seq += 1
+                    txrx = "TX" if is_tx else "RX"
+                    dtype = "ERR" if msg.is_error else ("EXT" if msg.is_extended else "STD")
+                    w.writerow([str(seq), ts, msg.id_str, dtype,
+                                str(msg.dlc), txrx, msg.data_str])
+        except Exception:
+            pass
+
+    def _open_history(self) -> None:
+        from gui.history_window import HistoryWindow
+        HistoryWindow(self.winfo_toplevel(), self._history_file)
 
     @property
     def paused(self) -> bool: return self._paused
