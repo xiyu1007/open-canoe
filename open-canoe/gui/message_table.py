@@ -115,6 +115,16 @@ class MessageTable(ttk.Frame):
 
     def _rebuild(self) -> None:
         scroll_pos = self._tree.yview()
+        # Save selection keys to restore after rebuild (collapsed mode loses selection)
+        sel_keys: set[tuple] = set()
+        for item in self._tree.selection():
+            v = self._tree.item(item, "values")
+            if v:
+                can_id = int(v[2].replace("0x", ""), 16)
+                is_tx = v[5] == "TX"
+                is_remote = "RTR" in str(v[3])
+                is_ext = v[3] in ("扩展", "EXT", "RTR EXT")
+                sel_keys.add((can_id, is_tx, is_remote, is_ext))
         self._tree.delete(*self._tree.get_children())
         self._cnt = 0
         if self._collapsed:
@@ -133,6 +143,15 @@ class MessageTable(ttk.Frame):
         # Restore scroll position (Bug #1: don't auto-scroll to bottom)
         if scroll_pos and scroll_pos[0] > 0:
             self._tree.yview_moveto(scroll_pos[0])
+        # Restore selection in collapsed mode
+        if sel_keys:
+            for item in self._tree.get_children():
+                v = self._tree.item(item, "values")
+                if v:
+                    k = (int(v[2].replace("0x", ""), 16), v[5] == "TX",
+                         "RTR" in str(v[3]), v[3] in ("扩展", "EXT", "RTR EXT"))
+                    if k in sel_keys:
+                        self._tree.selection_add(item)
 
     def _toggle_tx(self) -> None:
         if self._show_tx:
