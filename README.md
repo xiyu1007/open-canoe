@@ -164,10 +164,10 @@ Full specification in [SPECIFICATION.md](SPECIFICATION.md) §3.
 
 ```
 STM32F103       SN65HVD230
-PB8 (CAN_RX) →  CRXD (pin 4)
-PB9 (CAN_TX) →  CTXD (pin 1)
-GND          →  GND
-3.3V         →  VCC
+PA11 (CAN_RX) → CRXD (pin 4)
+PA12 (CAN_TX) → CTXD (pin 1)
+GND           → GND
+3.3V          → VCC
 ```
 
 ### Development
@@ -314,10 +314,10 @@ CRC:    CRC-CCITT, 多项式 0x1021, 初始值 0xFFFF
 
 ```
 STM32F103       SN65HVD230
-PB8 (CAN_RX) →  CRXD (pin 4)
-PB9 (CAN_TX) →  CTXD (pin 1)
-GND          →  GND
-3.3V         →  VCC
+PA11 (CAN_RX) → CRXD (pin 4)
+PA12 (CAN_TX) → CTXD (pin 1)
+GND           → GND
+3.3V          → VCC
 ```
 
 ### 测试

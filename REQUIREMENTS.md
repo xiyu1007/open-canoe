@@ -109,6 +109,10 @@ app.root.destroy()
 | 4 | `_try_heartbeat` 找不到设备          | 心跳已发送，无主动探测                                                                                 | 发送 GET_INFO 作为 fallback                | ✅ 已修复       |
 | 5 | 报文表有 RX 但日志报 CMD 0x34 failed   | Python `unpack_can_frame_up` 读 20 字节，实际 `can_frame_up_t` 是 19 字节 packed，解包失败静默丢弃 | 改为 `payload[:19]`                      | ✅ 已修复       |
 | 6 | `Path.home()` 报错                   | 沙箱环境无 HOME 目录                                                                                   | 设置 `HOME` 环境变量                     | ⚠️ 仅测试环境 |
+| 7 | 删除报文后滚动条跳到底部              | `_rebuild` 恢复选中项时触发了 Treeview 的 `see()` 行为                                               | 删除操作不再恢复选中，独立保存/恢复滚动位置 | ✅ 已修复 |
+| 8 | 周期发送时滚动条被锁定无法拖动        | `add()` 无条件调用 `yview_moveto(1.0)`                                                              | 仅在用户已在底部（yview[1]>=0.95）时自动滚动 | ✅ 已修复 |
+| 9 | 折叠/展开几万条报文导致卡死           | `_rebuild` 每次 O(n) 扫描，Tk Treeview 无上限插入                                                   | 增量 `_collapse_cache` (O(1))，`MAX_VISIBLE=20000` 上限 | ✅ 已修复 |
+| 10 | 折叠模式下新报文到达后选中状态被清除  | `add()` 在折叠模式下调 `_rebuild()` 清空全部树节点                                                   | `_rebuild` 保存/恢复选中项的 key 四元组       | ✅ 已修复 |
 
 ### 固件层 (C)
 
@@ -117,22 +121,23 @@ app.root.destroy()
 | 7  | CAN 完全不工作                                                                  | 引脚配置为 PB8/PB9（AFIO 重映射），但板载收发器在 PA11/PA12（默认引脚）                                                                                 | 改为 PA11(RX/上拉)、PA12(TX/AF_PP)，去掉 AFIO 重映射                                           | ✅ 已修复     |
 | 8  | CAN TX 报显性位错误 (LEC=5)                                                     | 时钟设为 HSE 72MHz 但实际用 HSI 64MHz，APB1 时钟宏定义为 36MHz 实际 32MHz，CAN 时序错误                                                                 | APB1_CLOCK_HZ 改为 32MHz，使用 HSI+PLL=64MHz                                                   | ✅ 已修复     |
 | 9  | HAL_CAN_Init 初始化后 CAN 不能发送                                              | HAL 在 F103 上的 CAN 实现有已知兼容问题，`HAL_CAN_Start`/`HAL_CAN_Init` 不可靠                                                                      | 放弃 HAL，改用 SPL 风格直接寄存器写入                                                          | ✅ 已修复     |
-| 10 | 模式切换后 TX 失败                                                              | `can_set_mode` 退出 init 模式后 CAN 未稳定就发送                                                                                                      | 退出 init 后加稳定延迟                                                                         | ⚠️ 部分修复 |
+| 10 | 模式切换后 TX 失败                                                              | `can_set_mode` 退出 init 模式后 CAN 未稳定就发送                                                                                                      | 退出 init 后加稳定延迟 + 清除 mailbox/FIFO                                                    | ✅ 已修复     |
 | 11 | 3 次发送后 mailbox 全满，后续发送全部失败                                       | fire-and-forget 发送不释放 mailbox，3 个 mailbox 填满后 TME=0                                                                                           | 每次发送前检查 RQCP 释放已完成传输的 mailbox                                                   | ✅ 已修复     |
-| 12 | NORMAL 模式出现 RX 帧（幽灵帧）                                                 | F103 在 NORMAL 模式也会内部环回 TX→RX；ISR 在 NORMAL 模式下也上报 RX                                                                                   | ISR 中检查 BTR[30]（环回位），NORMAL 模式不回调；send handler 中检查 BTR 模式再决定是否上报 RX | ✅ 已修复 |
-| 13 | 模式切换时弹出旧帧（残留 RX）                                                   | NART=0 导致失败 TX 自动重传，重传的环回帧进入 FIFO，模式切换后被读取                                                                                    | 模式切换时清零所有 TX mailbox + 清空 RX FIFO；NORMAL 模式设 NART=1 禁止重传                    | ⚠️ 部分修复 |
-| 14 | NORMAL 模式发送失败后切换到环回仍失败                                           | TX 错误计数器累积到 bus-off，切换模式时未清除                                                                                                           | 每次进入 init 模式自动清除错误计数器（F103 硬件特性）                                          | ⚠️ 部分修复 |
+| 12 | NORMAL 模式出现 RX 帧（幽灵帧）                                                 | F103 在 NORMAL 模式也会内部环回 TX→RX；ISR 在 NORMAL 模式下也上报 RX                                                                                   | ISR 中检查 BTR[30]（环回位），NORMAL 模式不回调；send handler 中检查 BTR 模式再决定是否上报 RX | ✅ 已修复     |
+| 13 | 模式切换时弹出旧帧（残留 RX）                                                   | NART=0 导致失败 TX 自动重传，重传的环回帧进入 FIFO，模式切换后被读取                                                                                    | 模式切换时清零所有 TX mailbox + 清空 RX FIFO；NORMAL 模式设 NART=1 禁止重传                    | ✅ 已修复     |
+| 14 | NORMAL 模式发送失败后切换到环回仍失败                                           | TX 错误计数器累积到 bus-off，切换模式时未清除                                                                                                           | 每次进入 init 模式自动清除错误计数器（F103 硬件特性）                                          | ✅ 已修复     |
 | 15 | `protocol_send_can_frame` 隐含声明导致调用失败                                | 函数在 `handle_can_send_frame` 之后定义，前向引用缺少声明                                                                                             | 在 protocol_handler.c 开头加 `extern void protocol_send_can_frame(...)`                      | ✅ 已修复     |
-| 16 | ISR 中的 `HAL_CAN_GetRxMessage` 与 SPL 风格 CAN 不兼容，读到 DLC=0            | HAL 函数依赖 `h->State` 等内部状态，与 SPL 直接寄存器写入不同步                                                                                       | ISR 改用直接读 `sFIFOMailBox` 寄存器                                                         | ⚠️ 部分修复 |
-| 17 | ISR 抢先读取 FIFO 导致 send handler 的 poll 看到空 FIFO                         | CAN ISR (FMPIE0) 在 poll 之前触发，读走了环回帧                                                                                                         | 禁用 FMPIE0，只用 send handler 内的 poll；ISR 只负责 drain                                     | ⚠️ 部分修复 |
-| 18 | `HAL_CAN_IRQHandler` 可能消费 RX 中断标志导致 `can_process_rx_irq` 收不到帧 | HAL ISR handler 清理了中断标志                                                                                                                          | 绕过 HAL_CAN_IRQHandler，ISR 中直接调用 `can_process_rx_irq`                                 | ⚠️ 部分修复 |
+| 16 | ISR 中的 `HAL_CAN_GetRxMessage` 与 SPL 风格 CAN 不兼容，读到 DLC=0            | HAL 函数依赖 `h->State` 等内部状态，与 SPL 直接寄存器写入不同步                                                                                       | ISR 改用直接读 `sFIFOMailBox` 寄存器                                                         | ✅ 已修复     |
+| 17 | ISR 抢先读取 FIFO 导致 send handler 的 poll 看到空 FIFO                         | CAN ISR (FMPIE0) 在 poll 之前触发，读走了环回帧                                                                                                         | 禁用 FMPIE0；can_process_rx_irq 在环回模式下直接返回；CAN 中断 NVIC 级别禁用                    | ✅ 已修复     |
+| 18 | `HAL_CAN_IRQHandler` 可能消费 RX 中断标志导致 `can_process_rx_irq` 收不到帧 | HAL ISR handler 清理了中断标志                                                                                                                          | 绕过 HAL_CAN_IRQHandler，ISR 中直接调用 `can_process_rx_irq`                                 | ✅ 已修复     |
 | 19 | 忙等延迟不可靠（编译优化可能消除，长度不确定）                                  | 使用 `for(volatile uint32_t d=0; d<N; d++)` 类型的忙等                                                                                                | 尽量用 `HAL_Delay()`，关键路径保留短忙等                                                     | ⚠️ 部分修复 |
-| 20 | `can_run_test` (cmd 0x05) 可工作但主流程不工作                                | `can_run_test` 从零初始化 CAN（开时钟→GPIO→完整 init→发送），主流程的 `can_init`+`can_set_mode`+`can_send_frame` 混合 HAL/SPL 导致状态不一致 | 尚未彻底解决 — 需要统一为纯 SPL 风格                                                          | ❌ 未解决     |
+| 20 | `can_run_test` (cmd 0x05) 可工作但主流程不工作                                | `can_run_test` 从零初始化 CAN（开时钟→GPIO→完整 init→发送），主流程的 `can_init`+`can_set_mode`+`can_send_frame` 混合 HAL/SPL 导致状态不一致 | can_init 统一为纯 SPL 风格（直接寄存器写入 GPIO/BTR/过滤器）；handle_can_send_frame 使用 IER 禁用+轮询 | ✅ 已修复     |
 | 21 | `can_run_test_ext` 带外设复位的版本在 config 命令之后调用会挂起               | 外设复位 (RCC_APB1RSTR) 清除时钟使能位和所有寄存器                                                                                                      | 去掉外设复位，改为仅进入 init 模式再退出（自动清除错误计数器）                                 | ✅ 已修复     |
 | 23 | ISR 错误中断标志未清除导致中断风暴                    | `can_process_error_irq` 在环回模式下返回前未清除 EWG/EPV/BOF/LEC 标志，ISR 无限重入         | 环回模式下也清除所有错误标志                                                                 | ✅ 已修复     |
 | 24 | APB1=32MHz 下 500kbps/250kbps 时序硬编码值错误      | 硬编码 psc=9 对应 APB1=36MHz，实际 APB1=32MHz 需 psc=8                                         | 修正硬编码时序值                                                                             | ✅ 已修复     |
 | 25 | **环回模式无 RX 帧（核心问题）**                     | CAN 错误中断 (ERRIE/BOFIE/LECIE) 在环回 TX 期间持续触发形成中断风暴，CPU 锁死在 ISR 中，busy-wait 轮询无法执行 | `handle_can_send_frame` 在 send+poll 前保存并禁用 CAN IER，操作完成后恢复                    | ✅ 已修复     |
 | 22 | 发送命令无响应（函数挂起）                                                      | RQCP 等待永不满足——CAN 控制器在 NORMAL 模式无收发器时无法完成 TX                                                                                      | fire-and-forget：放入 mailbox 即返回成功，不等 RQCP                                            | ✅ 已修复     |
+| 26 | 断开重连后环回失效（Session 2+ 无 RX）              | `handle_can_set_baudrate` 在 `can_is_initialized()==true` 时调用 `can_set_baudrate()` 使用 `HAL_CAN_Init` 破坏 CAN 状态 | 始终调用 `can_deinit` + `can_init`，永不使用 `can_set_baudrate`                                 | ✅ 已修复     |
 
 ## 六、文档同步规则
 
@@ -150,17 +155,21 @@ app.root.destroy()
 
 ### 已修复的问题（本次会话）
 
-以下问题已在此次开发会话中修复：
-- **环回模式无 RX 帧 (Bug #25)**: 根因是 CAN 错误中断 (ERRIE/BOFIE/LECIE) 在环回模式 TX 期间持续触发，形成中断风暴导致 CPU 锁死，busy-wait 无法完成。修复：`handle_can_send_frame` 在 send+poll 前禁用 CAN IER，完成后恢复。
-- **幽灵 RX (Bug #12)**: ISR drain 和 handle_can_send_frame 均检查 BTR[30]，NORMAL 模式不发送/不 drain RX
-- **残留 RX (Bug #13)**: 模式切换清除 mailbox+FIFO，NART 按模式控制
-- **错误累积 (Bug #14)**: 每次发送进入 init 模式自动清除错误计数器
-- **ISR 竞争 (Bug #17)**: FMPIE0 禁用，can_process_rx_irq 环回模式返回，can_set_mode 不启用 FMPIE0
-- **ISR 错误中断标志未清除 (Bug #23)**: can_process_error_irq 在环回模式下也清除中断标志 (EWG/EPV/BOF/LEC)
-- **APB1 时序错误 (Bug #24)**: 硬编码时序值从 APB1=36MHz 修正为 APB1=32MHz
+**固件层 (8 个修复)**：
+- **环回模式无 RX 帧 (Bug #25)**: CAN 错误中断在环回 TX 期间形成中断风暴。修复：handle_can_send_frame 在 send+poll 前禁用 CAN IER + 清除 ESR.LEC，操作完成后恢复。CAN 中断在 NVIC 级别禁用。
+- **断开重连后环回失效 (Bug #26)**: Session 2+ 调用 can_set_baudrate 使用 HAL_CAN_Init 破坏状态。修复：始终调用 can_deinit + can_init (SPL 风格)。
 - **HAL/SPL 混合 (Bug #20)**: can_init 统一为纯 SPL 风格（直接寄存器写入 GPIO/BTR/过滤器）
-- **HAL_CAN_GetRxMessage 不兼容 (Bug #16)**: ISR 改用直接寄存器读取
-- **HAL_CAN_GetRxMessage 不兼容 (Bug #16)**: ISR 改用直接寄存器读取
+- **幽灵 RX (Bug #12)**: ISR drain 和 handle_can_send_frame 均检查 BTR[30]
+- **残留 RX (Bug #13)**: 模式切换清除 mailbox+FIFO，NART 按模式控制
+- **ISR 竞争 (Bug #17)**: CAN 中断 NVIC 级别禁用；can_set_mode 不启用 FMPIE0
+- **ISR 错误标志未清除 (Bug #23)**: can_process_error_irq 环回模式下也清除 EWG/EPV/BOF/LEC
+- **APB1 时序错误 (Bug #24)**: 硬编码时序值从 APB1=36MHz 修正为 APB1=32MHz
+
+**App 层 (4 个修复)**：
+- **删除报文跳到底部 (Bug #7)**: _delete_selected 独立保存/恢复滚动位置，不恢复选中
+- **周期发送滚动条锁定 (Bug #8)**: add() 仅在用户已在底部时自动滚动
+- **折叠/展开卡死 (Bug #9)**: 增量 _collapse_cache (O(1))，MAX_VISIBLE=20000 上限
+- **折叠模式选中被清除 (Bug #10)**: _rebuild 保存/恢复选中项 key 四元组
 
 ## 八、完整 UI 控件测试清单
 

@@ -55,6 +55,11 @@ scripts/
 test/
   test_protocol.py           (protocol codec unit tests, no hardware needed)
   test_hardware.py           (full hardware integration test suite)
+
+test_gui_full.py             (27-step CAN flow GUI test, invoke() based)
+test_ui_controls.py          (33-item UI controls GUI test)
+
+REQUIREMENTS.md              (test requirements, historical bugs, cross-module rules)
 ```
 
 ## Run App
@@ -88,7 +93,19 @@ cd open-canoe && uv run python ../test/test_protocol.py
 uv run python ../test/test_hardware.py COM7 --loopback
 uv run python ../test/test_hardware.py COM7
 uv run python ../test/test_hardware.py --scan
+
+# Full GUI integration test (27 steps, requires flashed probe on COM7)
+uv run python ../test_gui_full.py
+
+# UI controls test (33 items, requires flashed probe on COM7)
+uv run python ../test_ui_controls.py
 ```
+
+**REQUIREMENTS.md** is the authoritative test specification. Read it before modifying any firmware or App logic. It contains:
+- 30+ historical bugs with root cause analysis
+- Complete UI control test checklist (every button/checkbox/dropdown)
+- Cross-module testing rules
+- 9-step CAN flow test criteria
 
 ## Architecture
 
@@ -111,9 +128,11 @@ CRC:   CRC-CCITT, polynomial 0x1021, initial value 0xFFFF
 ### Firmware Layer Rules
 
 1. **`inc/`** — hardware-independent interfaces only. No MCU types, registers, or CMSIS.
-2. **`src/`** — driver implementations using macros from `f103/stm32f103_config.h` etc. All peripheral access via STM32 HAL.
+2. **`src/`** — driver implementations using macros from `f103/stm32f103_config.h` etc. **CAN driver uses SPL-style direct register writes** (HAL_CAN_Init is unreliable on F103). UART/GPIO use HAL.
 3. **`f103/`, `f407/` etc.** — per-MCU directory with everything needed for that chip. CubeMX files never modified.
-4. **`protocol_handler.c`** — pure C, no HAL includes.
+4. **`protocol_handler.c`** — pure C, no HAL includes. CAN register access via raw pointers: `(volatile uint32_t *)0x40006400UL`.
+5. **CAN interrupts are disabled at NVIC level** — all CAN events are poll-driven. IER is saved/cleared/restored in `handle_can_send_frame` because writing IER=0 has a necessary side-effect on F103.
+6. **Always use `can_init` (SPL-style), never `can_set_baudrate` (HAL)** — `handle_can_set_baudrate` calls `can_deinit` + `can_init`, never `can_set_baudrate` which uses HAL_CAN_Init.
 
 ### Startup Flow
 
