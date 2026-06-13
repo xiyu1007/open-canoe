@@ -96,13 +96,13 @@ class SendPanel(ttk.Frame):
         self._f_id_entry.bind("<FocusOut>", self._on_filter_focus_out)
         self._f_id_var.trace_add("write", lambda *_: self._apply_filter())
 
-        fm = ttk.Frame(self); fm.grid(row=r, column=0, sticky=tk.EW); r += 1
+        fm = ttk.Frame(self, style="Card.TFrame"); fm.grid(row=r, column=0, sticky=tk.EW); r += 1
         self._f_mode = tk.StringVar(value="off")
-        ttk.Radiobutton(fm, text=L_["filter_show"], variable=self._f_mode,
+        ttk.Radiobutton(fm, text=L_["filter_show"], variable=self._f_mode, style="Card.TRadiobutton",
                         value="show", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Radiobutton(fm, text=L_["filter_hide"], variable=self._f_mode,
+        ttk.Radiobutton(fm, text=L_["filter_hide"], variable=self._f_mode, style="Card.TRadiobutton",
                         value="hide", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Radiobutton(fm, text=L_["filter_off"], variable=self._f_mode,
+        ttk.Radiobutton(fm, text=L_["filter_off"], variable=self._f_mode, style="Card.TRadiobutton",
                         value="off", command=self._apply_filter).pack(side=tk.LEFT, padx=(0, 4))
 
         s(L_["msg_filter"], r); r += 1
@@ -115,13 +115,13 @@ class SendPanel(ttk.Frame):
         self._mf_id_entry.bind("<FocusOut>", self._on_msg_focus_out)
         self._mf_id_var.trace_add("write", lambda *_: self._apply_msg_filter())
 
-        fm2 = ttk.Frame(self); fm2.grid(row=r, column=0, sticky=tk.EW); r += 1
+        fm2 = ttk.Frame(self, style="Card.TFrame"); fm2.grid(row=r, column=0, sticky=tk.EW); r += 1
         self._mf_mode = tk.StringVar(value="off")
-        ttk.Radiobutton(fm2, text=L_["filter_show"], variable=self._mf_mode,
+        ttk.Radiobutton(fm2, text=L_["filter_show"], variable=self._mf_mode, style="Card.TRadiobutton",
                         value="show", command=self._apply_msg_filter).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Radiobutton(fm2, text=L_["filter_hide"], variable=self._mf_mode,
+        ttk.Radiobutton(fm2, text=L_["filter_hide"], variable=self._mf_mode, style="Card.TRadiobutton",
                         value="hide", command=self._apply_msg_filter).pack(side=tk.LEFT, padx=(0, 4))
-        ttk.Radiobutton(fm2, text=L_["filter_off"], variable=self._mf_mode,
+        ttk.Radiobutton(fm2, text=L_["filter_off"], variable=self._mf_mode, style="Card.TRadiobutton",
                         value="off", command=self._apply_msg_filter).pack(side=tk.LEFT)
 
     def _do_format(self) -> None:

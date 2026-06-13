@@ -94,6 +94,7 @@ class MainWindow:
         s.configure("TEntry", font=FONT_BODY)
         s.configure("TCombobox", font=FONT_BODY)
         s.configure("TCheckbutton", font=FONT_BODY, background=CARD)
+        s.configure("Card.TRadiobutton", font=FONT_BODY, background=CARD)
         s.configure("Treeview", font=FONT_BODY, rowheight=22)
         s.configure("Treeview.Heading", font=FONT_SECTION)
 
