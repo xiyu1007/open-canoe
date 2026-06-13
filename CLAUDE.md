@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **open-canoe** — open CAN bus analyzer with STM32 hardware probe and native desktop GUI (tkinter/ttk).
 
 Two components communicate via a binary protocol over USART/USB-CDC:
+
 - **App**: `open-canoe/` — Python desktop GUI
 - **Firmware**: `firmware/` — C/STM32 HAL hardware probe
 
@@ -46,6 +47,10 @@ tools/
   build.py                   (unified build/flash, JSON output)
   send_cmd.py                (single protocol command)
   test_pyserial.py           (full protocol test suite)
+
+scripts/
+  deploy.py                  (one-click build + flash + test)
+  test_app.py                (app simulation test, no GUI needed)
 
 test/
   test_protocol.py           (protocol codec unit tests, no hardware needed)
@@ -138,13 +143,13 @@ CRC:   CRC-CCITT, polynomial 0x1021, initial value 0xFFFF
 
 ### Key Build Differences Between MCUs
 
-| Aspect | STM32F103C8T6 | STM32F407VET6 |
-|--------|---------------|---------------|
-| CPU flag | `-mcpu=cortex-m3` | `-mcpu=cortex-m4` |
-| FPU flags | none | `-mfpu=fpv4-sp-d16 -mfloat-abi=hard` |
-| STM32 define | `-DSTM32F103xB` | `-DSTM32F407xx` |
-| Linker script | `f103/STM32F103XX_FLASH.ld` | `f407/STM32F407XX_FLASH.ld` |
-| Startup file | `f103/startup_stm32f103xb.s` | `f407/startup_stm32f407xx.s` |
-| Flash / RAM | 64K / 20K | 512K / 128K (+ 64K CCM) |
+| Aspect        | STM32F103C8T6                  | STM32F407VET6                          |
+| ------------- | ------------------------------ | -------------------------------------- |
+| CPU flag      | `-mcpu=cortex-m3`            | `-mcpu=cortex-m4`                    |
+| FPU flags     | none                           | `-mfpu=fpv4-sp-d16 -mfloat-abi=hard` |
+| STM32 define  | `-DSTM32F103xB`              | `-DSTM32F407xx`                      |
+| Linker script | `f103/STM32F103XX_FLASH.ld`  | `f407/STM32F407XX_FLASH.ld`          |
+| Startup file  | `f103/startup_stm32f103xb.s` | `f407/startup_stm32f407xx.s`         |
+| Flash / RAM   | 64K / 20K                      | 512K / 128K (+ 64K CCM)                |
 
 Linker scripts have `(READONLY)` keywords stripped at build time (via sed) for GCC 10 compatibility.

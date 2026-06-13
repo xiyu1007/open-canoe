@@ -272,8 +272,9 @@ def pack_can_send_frame(
 
 def unpack_can_frame_up(payload: bytes) -> dict:
     """Unpack a can_frame_up_t payload (MSG_CAN_FRAME_UP)."""
+    # struct is 19 bytes packed: timestamp(4)+can_id(4)+dlc(1)+flags(1)+data(8)+channel(1)
     timestamp, can_id, dlc, flags, raw_data, channel = struct.unpack(
-        "<I I B B 8s B", payload[:20]
+        "<I I B B 8s B", payload[:19]
     )
     return {
         "timestamp_us": timestamp,

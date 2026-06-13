@@ -214,6 +214,21 @@ uint8_t can_get_channel_count(void);
  */
 uint8_t can_is_initialized(uint8_t channel);
 
+/** CAN loopback diagnostic test. Returns number of bytes written to out. */
+int can_run_test(uint8_t *out, uint16_t maxlen);
+int can_run_test_ext(uint32_t can_id, uint8_t dlc, uint8_t flags, const uint8_t *txdata);
+
+/**
+ * @brief Poll RX FIFO for a loopback echo frame after sending.
+ *        Does NOT reinitialize CAN — assumes CAN is already configured.
+ * @param channel         CAN channel index
+ * @param expected_id     The CAN ID we expect to see in the loopback frame
+ * @param timeout_cycles  Busy-wait loop iterations before giving up
+ * @return 1 if matching loopback frame was received, 0 otherwise
+ */
+int can_poll_for_loopback_rx(uint8_t channel, uint32_t expected_id,
+                             uint32_t timeout_cycles);
+
 #ifdef __cplusplus
 }
 #endif

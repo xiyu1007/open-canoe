@@ -105,9 +105,23 @@ int main(void)
     {
         uint8_t byte_buf[64];
         uint16_t recv_len;
+
+        /* Process incoming protocol commands */
         comm_status_t ret = comm_receive(byte_buf, sizeof(byte_buf), &recv_len, 0);
         if (ret == COMM_OK && recv_len > 0) {
             protocol_process_buffer(byte_buf, recv_len);
+        }
+
+        /* Poll CAN RX FIFO for received frames (loopback or real bus).
+         * Interrupt-based reception is the primary path, but polling
+         * catches frames if the IRQ was missed or shared-IRQ conflicts. */
+        for (uint8_t ch = 0; ch < can_get_channel_count(); ch++) {
+            if (can_is_initialized(ch)) {
+                can_frame_t frame;
+                if (can_receive_frame(ch, &frame, 0) == CAN_OK) {
+                    protocol_send_can_frame(&frame);
+                }
+            }
         }
     }
 }
@@ -122,6 +136,8 @@ static void SystemClock_Config(void)
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
 #if defined(STM32F103xB)
+    /* Try HSI first (more compatible). HSI 8MHz /2 * PLL16 = 64MHz.
+     * APB1 = 32MHz, APB2 = 64MHz. CAN timing adjusted accordingly. */
     RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
     RCC_OscInitStruct.HSIState = RCC_HSI_ON;
     RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;

@@ -14,6 +14,7 @@ from core.protocol import (
     decode,
     encode,
     unpack_heartbeat,
+    unpack_device_info,
     MAGIC_HEADER,
     END_MAGIC,
 )
@@ -241,47 +242,58 @@ def list_serial_ports() -> list[TransportInfo]:
 # ── Auto-Detect ──────────────────────────────────────────────────────
 
 
-def _try_heartbeat(port: str, baudrate: int, timeout: float = 2.0) -> dict | None:
-    """Try to detect a CAN probe on a port by listening for heartbeat."""
-    import serial as _serial
-
-    ser = None
+def _try_heartbeat(port: str, baudrate: int, timeout: float = 0.8) -> dict | None:
+    """Quick single-port probe. Returns device info dict or None."""
+    tr = SerialTransport(port=port, baudrate=baudrate)
     try:
-        ser = _serial.Serial(port, baudrate, timeout=0.1)
-        receiver = FrameReceiver()
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            waiting = ser.in_waiting
-            if waiting > 0:
-                data = ser.read(min(waiting, 1024))
-                frames = receiver.feed(data)
-                for f in frames:
-                    if f.command == Command.DEVICE_HEARTBEAT:
-                        info = unpack_heartbeat(f.payload)
-                        info["port"] = port
-                        info["baudrate"] = baudrate
-                        return info
-            else:
-                time.sleep(0.02)
+        tr.connect()
     except Exception:
-        pass
-    finally:
-        if ser is not None:
+        return None
+    deadline = time.monotonic() + timeout
+    hb = None
+    sent_getinfo = False
+    while time.monotonic() < deadline:
+        frames = tr.incoming()
+        for f in frames:
+            if f.command == Command.DEVICE_HEARTBEAT:
+                try:
+                    hb = unpack_heartbeat(f.payload)
+                except Exception:
+                    pass
+                break
+            elif f.command == Command.INFO_RESPONSE:
+                try:
+                    info = unpack_device_info(f.payload)
+                    hb = {"mcu_model": info.get("mcu_model", "?"),
+                          "fw_version": info.get("fw_version", "?"),
+                          "comm_interface": "USART"}
+                except Exception:
+                    pass
+                break
+        if hb:
+            break
+        if not sent_getinfo and time.monotonic() > deadline - 0.5:
             try:
-                ser.close()
+                tr.write(encode(Command.GET_INFO))
+                sent_getinfo = True
             except Exception:
-                pass
-    return None
+                break
+        time.sleep(0.02)
+    tr.disconnect()
+    if hb:
+        hb["port"] = port
+        hb["baudrate"] = baudrate
+    return hb
 
 
-def auto_detect(baudrates: list[int] | None = None) -> AbstractTransport:
-    """Auto-detect CAN probe by scanning ports for device heartbeat.
+def auto_detect(baudrates: list[int] | None = None) -> tuple[AbstractTransport, dict]:
+    """Auto-detect CAN probe by scanning ports.
 
-    Tries each port at common baudrates. Returns connected transport
-    with the port that responded, or raises TransportError.
+    Opens each port, tries heartbeat then GET_INFO. Returns a CONNECTED
+    transport + device info dict. Raises TransportError if no device found.
     """
     if baudrates is None:
-        baudrates = [115200, 921600, 460800, 230400, 1000000]
+        baudrates = [115200, 921600]
 
     ports = list_serial_ports()
     if not ports:
@@ -289,17 +301,58 @@ def auto_detect(baudrates: list[int] | None = None) -> AbstractTransport:
             "No serial ports found.\nConnect a CAN probe via USB and retry."
         )
 
-    # Prefer USB CDC devices
+    # Prefer USB CDC devices, skip Bluetooth virtual ports
     cdc_ports = [p for p in ports if p.transport_type == "usb_cdc"]
-    other_ports = [p for p in ports if p.transport_type != "usb_cdc"]
+    other_ports = [p for p in ports if p.transport_type != "usb_cdc"
+                   and "bluetooth" not in p.description.lower()
+                   and "蓝牙" not in p.description]
     ordered = cdc_ports + other_ports
 
     for p in ordered:
         for br in baudrates:
-            hb = _try_heartbeat(p.port, br, timeout=1.5)
+            tr = SerialTransport(port=p.port, baudrate=br)
+            try:
+                tr.connect()
+            except Exception:
+                continue
+            time.sleep(0.3)
+
+            # Wait for heartbeat or probe with GET_INFO
+            hb = None
+            deadline = time.monotonic() + 2.0
+            while time.monotonic() < deadline:
+                frames = tr.incoming()
+                for f in frames:
+                    if f.command == Command.DEVICE_HEARTBEAT:
+                        try:
+                            hb = unpack_heartbeat(f.payload)
+                        except Exception:
+                            pass
+                        break
+                    elif f.command == Command.INFO_RESPONSE:
+                        try:
+                            info = unpack_device_info(f.payload)
+                            hb = {
+                                "mcu_model": info.get("mcu_model", "Unknown"),
+                                "fw_version": info.get("fw_version", "?"),
+                                "comm_interface": "USART",
+                            }
+                        except Exception:
+                            pass
+                        break
+                if hb:
+                    break
+                # If no passive response, actively probe with GET_INFO
+                if time.monotonic() > deadline - 1.5 and hb is None:
+                    try:
+                        tr.write(encode(Command.GET_INFO))
+                    except Exception:
+                        break
+                time.sleep(0.05)
+
             if hb is not None:
-                tr = SerialTransport(port=p.port, baudrate=br)
-                return tr
+                return tr, hb
+            tr.disconnect()
 
     raise TransportError(
         "No CAN probe detected.\n"
@@ -312,59 +365,61 @@ def detect_and_connect(
     port: str | None = None,
     baudrate: int = 115200,
 ) -> tuple[AbstractTransport, dict]:
-    """Connect to a device and wait for heartbeat. Returns (transport, device_info).
+    """Connect to a device and verify presence. Returns (transport, device_info).
 
     If port is None or 'auto', auto-detects. Otherwise uses the specified port.
-    Returns device info dict from heartbeat.
     """
     if port and port != "auto":
         tr = SerialTransport(port=port, baudrate=baudrate)
-        tr.connect()
-        # Wait for heartbeat
-        deadline = time.monotonic() + 3.0
-        hb = None
-        while time.monotonic() < deadline:
-            frames = tr.incoming()
-            for f in frames:
-                if f.command == Command.DEVICE_HEARTBEAT:
-                    hb = unpack_heartbeat(f.payload)
-                    break
-            if hb:
-                break
-            time.sleep(0.05)
-        if hb is None:
-            # Try higher baudrate
-            tr.disconnect()
-            tr = SerialTransport(port=port, baudrate=921600)
+        try:
             tr.connect()
-            deadline = time.monotonic() + 3.0
-            while time.monotonic() < deadline:
-                frames = tr.incoming()
-                for f in frames:
-                    if f.command == Command.DEVICE_HEARTBEAT:
-                        hb = unpack_heartbeat(f.payload)
-                        break
-                if hb:
-                    break
-                time.sleep(0.05)
-        if hb is None:
-            tr.disconnect()
-            raise TransportError(
-                "Device connected but no heartbeat received.\n"
-                "Verify the firmware is flashed correctly."
-            )
-        return tr, hb
+        except Exception as e:
+            raise TransportError(f"Could not open {port}: {e}")
+        time.sleep(0.3)
     else:
-        tr = auto_detect()
-        tr.connect()
-        # heartbeat already verified in auto_detect
-        receiver = FrameReceiver()
-        deadline = time.monotonic() + 2.0
-        while time.monotonic() < deadline:
-            frames = tr.incoming()
-            for f in frames:
-                if f.command == Command.DEVICE_HEARTBEAT:
-                    return tr, unpack_heartbeat(f.payload)
-            time.sleep(0.05)
+        return auto_detect(baudrates=[baudrate, 921600])
+
+    # Wait for heartbeat or probe with GET_INFO
+    hb = None
+    deadline = time.monotonic() + 3.0
+    sent_getinfo = False
+    while time.monotonic() < deadline:
+        frames = tr.incoming()
+        for f in frames:
+            if f.command == Command.DEVICE_HEARTBEAT:
+                try:
+                    hb = unpack_heartbeat(f.payload)
+                except Exception:
+                    pass
+                break
+            elif f.command == Command.INFO_RESPONSE:
+                try:
+                    info = unpack_device_info(f.payload)
+                    hb = {
+                        "mcu_model": info.get("mcu_model", "Unknown"),
+                        "fw_version": info.get("fw_version", "?"),
+                        "comm_interface": "USART",
+                    }
+                except Exception:
+                    pass
+                break
+        if hb:
+            break
+        # Active probe after 1s of no heartbeat
+        if not sent_getinfo and time.monotonic() > deadline - 2.0:
+            try:
+                tr.write(encode(Command.GET_INFO))
+                sent_getinfo = True
+            except Exception:
+                break
+        time.sleep(0.05)
+
+    if hb is None:
         tr.disconnect()
-        raise TransportError("Heartbeat lost after auto-detect.")
+        raise TransportError(
+            "No response from device.\n"
+            "Verify the CAN probe is connected and firmware is flashed.\n"
+            f"Port: {tr.info.port}  Baudrate: {tr.info.baudrate}"
+        )
+
+    return tr, hb

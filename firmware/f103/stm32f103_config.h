@@ -29,9 +29,10 @@ extern "C" {
 /*============================================================================
  * System Clocks
  *============================================================================*/
-#define SYSTEM_CLOCK_HZ         72000000UL
-#define APB1_CLOCK_HZ           36000000UL   /* APB1 max 36 MHz */
-#define APB2_CLOCK_HZ           72000000UL   /* APB2 max 72 MHz */
+/* HSI 8MHz /2 * PLL16 = 64MHz SYSCLK. APB1 = /2 = 32MHz, APB2 = /1 = 64MHz */
+#define SYSTEM_CLOCK_HZ         64000000UL
+#define APB1_CLOCK_HZ           32000000UL
+#define APB2_CLOCK_HZ           64000000UL
 #define TIMESTAMP_TIMER_CLK_HZ  1000000UL    /* 1 MHz for μs timestamp resolution */
 
 /*============================================================================
@@ -39,14 +40,14 @@ extern "C" {
  *============================================================================*/
 #define CAN_INSTANCE_COUNT      1
 
-/* CAN1 */
+/* CAN1 — default pins PA11(RX)/PA12(TX), no remap */
 #define CAN1_PERIPH_CLK_ENABLE()    __HAL_RCC_CAN1_CLK_ENABLE()
-#define CAN1_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOB_CLK_ENABLE()
-#define CAN1_PORT                   GPIOB
-#define CAN1_RX_PIN                 GPIO_PIN_8
-#define CAN1_TX_PIN                 GPIO_PIN_9
-#define CAN1_AFIO_REMAP()           __HAL_AFIO_REMAP_CAN1_2()  /* Remap CAN1 to PB8/PB9 */
-#define CAN1_AFIO_CLK_ENABLE()      __HAL_RCC_AFIO_CLK_ENABLE()
+#define CAN1_GPIO_CLK_ENABLE()      __HAL_RCC_GPIOA_CLK_ENABLE()
+#define CAN1_PORT                   GPIOA
+#define CAN1_RX_PIN                 GPIO_PIN_11
+#define CAN1_TX_PIN                 GPIO_PIN_12
+#define CAN1_AFIO_REMAP()           /* no remap needed — default PA11/PA12 */
+#define CAN1_AFIO_CLK_ENABLE()      /* no AFIO clock needed for default pins */
 #define CAN1_IRQn                   USB_LP_CAN1_RX0_IRQn
 #define CAN1_IRQHandler             USB_LP_CAN1_RX0_IRQHandler
 

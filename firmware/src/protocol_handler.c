@@ -11,6 +11,9 @@
 #include "device_api.h"
 #include <string.h>
 
+/* Forward declarations */
+extern void protocol_send_can_frame(const can_frame_t *frame);
+
 /*============================================================================
  * Internal State
  *============================================================================*/
@@ -226,11 +229,22 @@ static void handle_can_set_baudrate(const uint8_t *data, uint16_t data_len)
     }
 
     const can_set_baudrate_t *req = (const can_set_baudrate_t *)data;
-    can_status_t ret = can_set_baudrate(req->channel, req->baudrate);
+    can_status_t ret;
+
+    /* Auto-initialize CAN if not yet initialized */
+    if (!can_is_initialized(req->channel)) {
+        can_config_t cfg;
+        cfg.channel  = req->channel;
+        cfg.baudrate = req->baudrate;
+        cfg.mode     = CAN_MODE_NORMAL;
+        ret = can_init(req->channel, &cfg);
+    } else {
+        ret = can_set_baudrate(req->channel, req->baudrate);
+    }
 
     ack_resp_t ack;
     ack.ack_cmd    = CMD_CAN_SET_BAUDRATE;
-    ack.error_code = (ret == CAN_OK) ? ERR_NONE : ERR_INVALID_PARAM;
+    ack.error_code = (ret == CAN_OK) ? ERR_NONE : ERR_HARDWARE_FAULT;
     proto_send_data(MSG_ACK, (const uint8_t *)&ack, sizeof(ack));
 }
 
@@ -387,15 +401,71 @@ static void handle_can_send_frame(const uint8_t *data, uint16_t data_len)
     }
 
     const can_send_frame_t *req = (const can_send_frame_t *)data;
-    can_status_t ret = can_send_frame(req->channel, req->can_id,
-                                       req->flags & 0x01,      /* IDE */
-                                       (req->flags >> 1) & 0x01, /* RTR */
-                                       req->dlc, req->data, 100);
+    uint8_t ide = req->flags & 0x01;
+    uint8_t rtr = (req->flags >> 1) & 0x01;
+
+    /* Auto-initialize CAN if not yet configured */
+    if (!can_is_initialized(req->channel)) {
+        can_config_t cfg;
+        cfg.channel  = req->channel;
+        cfg.baudrate = 500000;
+        cfg.mode     = CAN_MODE_NORMAL;
+        if (can_init(req->channel, &cfg) != CAN_OK) {
+            ack_resp_t ack;
+            ack.ack_cmd    = CMD_CAN_SEND_FRAME;
+            ack.error_code = ERR_CAN_TX_FAILED;
+            proto_send_data(MSG_ACK, (const uint8_t *)&ack, sizeof(ack));
+            return;
+        }
+        can_start_listen(req->channel);
+    }
+
+    /* Disable CAN interrupts during send+poll to prevent ISR storm.
+     * The busy-wait loops use millions of cycles; if any CAN interrupt
+     * fires and the error condition persists, it creates an ISR storm
+     * that starves the main loop. */
+    volatile uint32_t *CAN1_IER = (volatile uint32_t *)0x40006414;
+    uint32_t saved_ier = *CAN1_IER;
+    *CAN1_IER = 0; /* Disable all CAN1 interrupts */
+
+    /* Send via can_send_frame (fire-and-forget, proper mailbox management) */
+    can_status_t ret = can_send_frame(
+        req->channel, req->can_id, ide, rtr, req->dlc, req->data, 0);
+
+    /* Poll for loopback RX (returns 0 immediately in normal mode) */
+    int rx_found = can_poll_for_loopback_rx(req->channel, req->can_id, 10000000);
+
+    /* Restore CAN interrupts */
+    *CAN1_IER = saved_ier;
+
+    /* Send CAN_FRAME_UP if loopback RX was received */
+    if (rx_found) {
+        can_frame_t rx_frame;
+        memset(&rx_frame, 0, sizeof(rx_frame));
+        rx_frame.id        = req->can_id;
+        rx_frame.ide       = ide;
+        rx_frame.rtr       = rtr;
+        rx_frame.dlc       = req->dlc;
+        rx_frame.channel   = req->channel;
+        rx_frame.timestamp = device_get_uptime_us();
+        memcpy(rx_frame.data, req->data, req->dlc > 8 ? 8 : req->dlc);
+        protocol_send_can_frame(&rx_frame);
+    }
 
     ack_resp_t ack;
     ack.ack_cmd    = CMD_CAN_SEND_FRAME;
     ack.error_code = (ret == CAN_OK) ? ERR_NONE : ERR_CAN_TX_FAILED;
     proto_send_data(MSG_ACK, (const uint8_t *)&ack, sizeof(ack));
+}
+/* CAN loopback diagnostic — delegates to can_driver */
+static void handle_can_test(const uint8_t *data, uint16_t data_len)
+{
+    (void)data;
+    (void)data_len;
+    uint8_t result[20];
+    extern int can_run_test(uint8_t *out, uint16_t maxlen);
+    int len = can_run_test(result, sizeof(result));
+    proto_send_data(MSG_ACK, result, (uint16_t)len);
 }
 
 static void handle_system_reset(const uint8_t *data, uint16_t data_len)
@@ -423,6 +493,7 @@ typedef struct {
 } cmd_entry_t;
 
 static const cmd_entry_t g_cmd_table[] = {
+    { 0x05,                     handle_can_test },      /* CAN loopback diagnostic */
     { CMD_GET_INFO,             handle_get_info },
     { CMD_GET_CAPABILITIES,     handle_get_capabilities },
     { CMD_GET_STATUS,           handle_get_status },
@@ -526,12 +597,18 @@ int protocol_process_byte(uint8_t byte)
                 uint16_t data_len = PROTO_GET_DATA_LEN(g_rx_expected_len);
 
                 /* Lookup and execute handler */
+                int handled = 0;
                 for (size_t i = 0; i < CMD_TABLE_SIZE; i++) {
                     if (g_cmd_table[i].cmd == cmd) {
                         g_cmd_table[i].handler(
                             &g_rx_buf[PROTOCOL_FRAME_HEADER_SIZE], data_len);
+                        handled = 1;
                         break;
                     }
+                }
+                /* Send NACK for any unhandled App→FW command */
+                if (!handled && cmd != 0x00) {
+                    proto_send_simple(MSG_NACK);
                 }
             }
 
