@@ -16,8 +16,9 @@ htmlcov/
 Thumbs.db
 
 # Build outputs
-hardware/build_f103/
-hardware/build_f407/
+firmware/build_f103/
+firmware/build_f407/
+*.o
 
 # Python virtual environment
 .venv/
