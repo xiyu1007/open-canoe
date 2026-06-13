@@ -8,14 +8,13 @@ from gui.config import *
 from gui.lang import L
 from core.models import CANMessage, BusStatistics
 
-MAX_VISIBLE = 20_000  # cap tree items to prevent freeze on collapse/expand
-
-_HISTORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "history")
+_HISTORY_DIR = os.path.join(APP_DATA_DIR, HISTORY_DIR_NAME)
 
 
 class MessageTable(ttk.Frame):
-    def __init__(self, parent, max_rows=100_000, message_limit=2_000):
+    def __init__(self, parent, max_rows=100_000, message_limit=2_000, on_open_history=None):
         super().__init__(parent)
+        self._cb_hist = on_open_history
         self._max = max_rows; self._cnt = 0; self._paused = False
         self._stats = BusStatistics()
         self._f_disp: set[int] = set(); self._f_disp_mode = "off"
@@ -30,8 +29,8 @@ class MessageTable(ttk.Frame):
 
     def _build(self) -> None:
         L_ = L()
-        self._cols = (L_["col_no"], L_["col_time"], L_["col_id"],
-                      L_["col_type"], L_["col_dlc"], L_["col_ch"], L_["col_data"])
+        # Stable internal column IDs (never change on lang switch)
+        self._col_ids = ("no", "time", "id", "type", "dlc", "dir", "data")
         _cw = (50, 120, 110, 100, 50, 50, 240)
         hdr = ttk.Frame(self); hdr.pack(fill=tk.X, pady=(0, 4))
         ttk.Label(hdr, text=L_["trace"], font=FONT_SECTION, foreground=PRIMARY).pack(side=tk.LEFT)
@@ -41,21 +40,24 @@ class MessageTable(ttk.Frame):
         ttk.Button(hdr, text=L_["delete"], command=self._delete_selected, width=8).pack(side=tk.LEFT, padx=2)
         self._btn_collapse = ttk.Button(hdr, text="≡", command=self._toggle_collapse, width=3)
         self._btn_collapse.pack(side=tk.LEFT, padx=2)
-        self._btn_hist = ttk.Button(hdr, text=L_.get("history", "Hist"), command=self._open_history, width=5)
-        self._btn_hist.pack(side=tk.LEFT, padx=2)
         self._s_tx = ttk.Style(); self._s_tx.configure("TX.TButton", font=FONT_BODY)
         self._s_rx = ttk.Style(); self._s_rx.configure("RX.TButton", font=FONT_BODY)
         self._btn_tx = ttk.Button(hdr, text="TX", command=self._toggle_tx, width=4, style="TX.TButton")
         self._btn_tx.pack(side=tk.RIGHT, padx=2)
         self._btn_rx = ttk.Button(hdr, text="RX", command=self._toggle_rx, width=4, style="RX.TButton")
         self._btn_rx.pack(side=tk.RIGHT, padx=2)
-        self._lbl = ttk.Label(hdr, text=f"0 {L_['msgs']}", foreground=SECONDARY, font=FONT_BODY)
+        self._btn_hist2 = ttk.Button(hdr, text="Hist", command=self._open_history, width=5)
+        self._btn_hist2.pack(side=tk.RIGHT, padx=(4, 8))
+        self._lbl = ttk.Label(hdr, text=f"0/{self._msg_limit} {L_['msgs']}", foreground=SECONDARY, font=FONT_BODY)
         self._lbl.pack(side=tk.RIGHT, padx=(0, 8))
         tf = ttk.Frame(self); tf.pack(fill=tk.BOTH, expand=True)
-        self._tree = ttk.Treeview(tf, columns=self._cols, show="headings", selectmode="extended")
-        for col, w in zip(self._cols, _cw):
-            self._tree.heading(col, text=col, anchor=tk.W)
-            self._tree.column(col, width=w, minwidth=w, stretch=(col == L_["col_data"]))
+        # Column headings: use internal IDs, display translated text
+        col_labels = (L_["col_no"], L_["col_time"], L_["col_id"],
+                      L_["col_type"], L_["col_dlc"], L_["col_ch"], L_["col_data"])
+        self._tree = ttk.Treeview(tf, columns=self._col_ids, show="headings", selectmode="extended")
+        for cid, w, label in zip(self._col_ids, _cw, col_labels):
+            self._tree.heading(cid, text=label, anchor=tk.W)
+            self._tree.column(cid, width=w, minwidth=w, stretch=(cid == "data"))
         vsb = ttk.Scrollbar(tf, orient=tk.VERTICAL, command=self._tree.yview)
         hsb = ttk.Scrollbar(tf, orient=tk.HORIZONTAL, command=self._tree.xview)
         self._tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -93,7 +95,7 @@ class MessageTable(ttk.Frame):
                 self._tree.yview_moveto(1.0)
         if msg.is_error: self._stats.record_error()
         else: self._stats.record_rx()
-        self._lbl.config(text=f"{self._cnt} {L()['msgs']}")
+        self._lbl.config(text=f"{self._cnt}/{self._msg_limit} {L()['msgs']}")
         self._offload_check()
         self._prune()
 
@@ -105,11 +107,16 @@ class MessageTable(ttk.Frame):
             if not self._show_rx and not is_tx: return
         self._cnt += 1; L_ = L()
         tag = "err" if msg.is_error else ("ext" if msg.is_extended else "std")
-        if msg.is_error: dtype = L_["type_err"]
-        elif msg.is_remote and msg.is_extended: dtype = "RTR EXT"
-        elif msg.is_remote: dtype = "RTR STD"
-        elif msg.is_extended: dtype = L_["type_ext"]
-        else: dtype = L_["type_std"]
+        # Internal type code (stable, used for CSV/filter)
+        if msg.is_error: dtype_code = "ERR"
+        elif msg.is_remote and msg.is_extended: dtype_code = "RTR_EXT"
+        elif msg.is_remote: dtype_code = "RTR_STD"
+        elif msg.is_extended: dtype_code = "EXT"
+        else: dtype_code = "STD"
+        # Display type (i18n)
+        _type_map = {"STD": L_["type_std"], "EXT": L_["type_ext"], "ERR": L_["type_err"],
+                     "RTR_STD": L_["type_rtr_std"], "RTR_EXT": L_["type_rtr_ext"]}
+        dtype = _type_map.get(dtype_code, dtype_code)
         txrx = "TX" if is_tx else "RX"
         self._tree.insert("", tk.END, values=(
             self._cnt, ts, msg.id_str, dtype, msg.dlc, txrx, msg.data_str), tags=(tag,))
@@ -117,7 +124,7 @@ class MessageTable(ttk.Frame):
     def clear(self) -> None:
         self._tree.delete(*self._tree.get_children())
         self._saved.clear(); self._collapse_cache.clear(); self._cnt = 0
-        self._lbl.config(text=f"0 {L()['msgs']}")
+        self._lbl.config(text=f"0/{self._msg_limit} {L()['msgs']}")
 
     def _rebuild(self) -> None:
         scroll_pos = self._tree.yview()
@@ -144,7 +151,7 @@ class MessageTable(ttk.Frame):
             items = items[-MAX_VISIBLE:]
         for msg, is_tx, ts in items:
             self._insert_one(msg, is_tx, ts)
-        self._lbl.config(text=f"{self._cnt} {L()['msgs']}"
+        self._lbl.config(text=f"{self._cnt}/{self._msg_limit} {L()['msgs']}"
                           + (f" (/{total})" if total > MAX_VISIBLE else ""))
         # Restore scroll position (Bug #1: don't auto-scroll to bottom)
         if scroll_pos and scroll_pos[0] > 0:
@@ -220,14 +227,28 @@ class MessageTable(ttk.Frame):
         if scroll_pos and scroll_pos[0] > 0:
             self._tree.yview_moveto(scroll_pos[0])
 
+    def refresh_lang(self) -> None:
+        """Update column headings after language change."""
+        L_ = L()
+        labels = (L_["col_no"], L_["col_time"], L_["col_id"],
+                  L_["col_type"], L_["col_dlc"], L_["col_ch"], L_["col_data"])
+        for cid, label in zip(self._col_ids, labels):
+            self._tree.heading(cid, text=label)
+        self._lbl.config(text=f"{self._cnt}/{self._msg_limit} {L_['msgs']}")
+
     def _toggle_collapse(self) -> None:
         self._collapsed = not self._collapsed
         self._btn_collapse.config(text="-" if self._collapsed else "≡")
+        # Rebuild entire collapse cache from scratch when entering collapsed mode
+        if self._collapsed:
+            self._collapse_cache.clear()
+            for msg, is_tx, ts in self._saved:
+                key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
+                self._collapse_cache[key] = (msg, is_tx, ts)
         self._rebuild()
 
     def _offload_check(self) -> None:
-        """Offload oldest half to CSV when in-memory count exceeds limit.
-        Runs immediately in add() — no waiting for collapse/expand."""
+        """Offload oldest half to CSV when in-memory count exceeds limit."""
         limit = self._msg_limit
         if len(self._saved) <= limit:
             return
@@ -237,40 +258,79 @@ class MessageTable(ttk.Frame):
                 _HISTORY_DIR,
                 f"canoe_msg_{time.strftime('%Y%m%d_%H%M%S')}.csv"
             )
-        # Remove the oldest half for performance
+        # Remove oldest half for performance
         cutoff = len(self._saved) - max(limit // 2, 1)
         to_offload = self._saved[:cutoff]
         self._saved = self._saved[cutoff:]
-        # Rebuild collapse cache from remaining
         self._collapse_cache.clear()
         for msg, is_tx, ts in self._saved:
             key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
             self._collapse_cache[key] = (msg, is_tx, ts)
-        # Append to CSV (header only if new file)
+        # Append to session CSV (accumulates all offloaded messages)
         write_header = not os.path.exists(self._history_file)
         try:
             with open(self._history_file, "a", newline="", encoding="utf-8") as fh:
                 w = csv.writer(fh)
-                if write_header:
-                    L_ = L()
-                    w.writerow([L_["col_no"], L_["col_time"], L_["col_id"],
-                                L_["col_type"], L_["col_dlc"], L_["col_ch"], L_["col_data"]])
                 for i, (msg, is_tx, ts) in enumerate(to_offload):
                     txrx = "TX" if is_tx else "RX"
-                    dtype = "ERR" if msg.is_error else ("EXT" if msg.is_extended else "STD")
-                    w.writerow([str(i + 1), ts, msg.id_str, dtype,
+                    # Use same type codes as _insert_one
+                    if msg.is_error: dt = "ERR"
+                    elif msg.is_remote and msg.is_extended: dt = "RTR_EXT"
+                    elif msg.is_remote: dt = "RTR_STD"
+                    elif msg.is_extended: dt = "EXT"
+                    else: dt = "STD"
+                    w.writerow([str(i + 1), ts, msg.id_str, dt,
                                 str(msg.dlc), txrx, msg.data_str])
         except Exception:
             pass
-        # Also offload from tree if not collapsed (trim oldest tree items)
+        # Rotate: keep only the 2 most recent CSV files
+        self._rotate_history()
         if not self._collapsed:
             self._rebuild()
 
+    def save_history_snapshot(self) -> None:
+        """Called on app close: write current in-memory messages to a final CSV.
+        This is separate from the live offload file — it captures the last state."""
+        if not self._saved:
+            return
+        os.makedirs(_HISTORY_DIR, exist_ok=True)
+        snap = os.path.join(_HISTORY_DIR, "canoe_snapshot.csv")
+        try:
+            with open(snap, "w", newline="", encoding="utf-8") as fh:
+                w = csv.writer(fh)
+                for msg, is_tx, ts in self._saved:
+                    txrx = "TX" if is_tx else "RX"
+                    if msg.is_error: dt = "ERR"
+                    elif msg.is_remote and msg.is_extended: dt = "RTR_EXT"
+                    elif msg.is_remote: dt = "RTR_STD"
+                    elif msg.is_extended: dt = "EXT"
+                    else: dt = "STD"
+                    w.writerow([ts, msg.id_str, dt, str(msg.dlc), txrx, msg.data_str])
+        except Exception:
+            pass
+        self._rotate_history()
+
+    def _rotate_history(self) -> None:
+        """Keep only the 2 most recent history CSV files (live + snapshots)."""
+        try:
+            files = sorted(
+                [os.path.join(_HISTORY_DIR, f) for f in os.listdir(_HISTORY_DIR)
+                 if f.startswith("canoe_") and f.endswith(".csv")],
+                key=os.path.getmtime, reverse=True
+            )
+            for old in files[_MAX_HISTORY_FILES:]:
+                os.remove(old)
+        except Exception:
+            pass
+
     def _open_history(self) -> None:
-        from gui.history_window import HistoryWindow
-        # Pass current in-memory messages + history file so Hist shows ALL
-        HistoryWindow(self.winfo_toplevel(), self._history_file,
-                      current_messages=self._saved)
+        """Open/focus history window (shared with View menu)."""
+        if self._cb_hist:
+            self._cb_hist(force_open=True)
+        else:
+            from gui.history_window import HistoryWindow
+            HistoryWindow(self.winfo_toplevel(), self._history_file,
+                          current_messages=self._saved)
 
     @property
     def paused(self) -> bool: return self._paused

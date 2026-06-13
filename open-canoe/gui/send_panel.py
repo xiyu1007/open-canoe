@@ -254,6 +254,14 @@ class SendPanel(ttk.Frame):
         except ValueError: ivl = 100
         self.after(ivl, self._tick)
 
+    def refresh_lang(self) -> None:
+        L_ = L()
+        self._btn_once.config(text=L_["send"])
+        self._btn_cyc.config(text=L_["start_cycle"] if not self._cycling else L_["stop_cycle"])
+        self._tp_var.set(L_["std_frame"])
+        tp = self._tp_combo
+        tp["values"] = [L_["std_frame"], L_["ext_frame"]]
+
     def stop_cycle(self) -> None:
         self._cycling = False; self._btn_cyc.config(text=L()["start_cycle"])
 

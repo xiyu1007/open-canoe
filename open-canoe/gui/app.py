@@ -58,6 +58,7 @@ class MainWindow:
         self._v_log    = tk.BooleanVar(value=True)
         self._v_left   = tk.BooleanVar(value=True)
         self._v_right  = tk.BooleanVar(value=True)
+        self._v_hist   = tk.BooleanVar(value=False)
 
         # Device state
         self._dev_info: dict = {}
@@ -134,8 +135,10 @@ class MainWindow:
         self._card_trace = ttk.Frame(self._frame_trace, style="Card.TFrame", padding=14)
         self._card_trace.pack(fill=tk.BOTH, expand=True)
         self._card_trace.rowconfigure(0, weight=1); self._card_trace.columnconfigure(0, weight=1)
+        self._hist_win = None
         self._tbl = MessageTable(self._card_trace, max_rows=self.settings.ui.max_log_lines,
-                                 message_limit=self.settings.ui.message_limit)
+                                 message_limit=self.settings.ui.message_limit,
+                                 on_open_history=self._toggle_history)
         self._tbl.pack(fill=tk.BOTH, expand=True)
         self._ctr_pane.add(self._frame_trace, weight=1)
 
@@ -153,6 +156,7 @@ class MainWindow:
         self._card_right.pack(fill=tk.BOTH, expand=True)
         self._snd = SendPanel(self._card_right, on_send=self._on_send, on_filter=self._on_filter)
         self._snd.pack(fill=tk.BOTH, expand=True)
+        self._snd.set_enabled(False)  # disabled until connected
         self._h_pane.add(self._frame_right, weight=0)
 
         # 日志
@@ -198,8 +202,8 @@ class MainWindow:
 
     def _build_menu(self) -> None:
         L_ = L()
-        mb = tk.Menu(self.root, font=FONT_BODY)
-        self.root.config(menu=mb)
+        mb = tk.Menu(self.root, font=FONT_BODY, tearoff=0)
+        self.root.config(menu=mb)  # replaces old menu (old one gets garbage collected)
         dm = tk.Menu(mb, tearoff=0)
         dm.add_command(label=L_["menu_connect"], command=self._connect_async)
         dm.add_command(label=L_["menu_disconnect"], command=self._disconnect)
@@ -216,6 +220,9 @@ class MainWindow:
         vm.add_checkbutton(label=L_["menu_send"], variable=self._v_right, command=self._relayout)
         vm.add_checkbutton(label=L_["menu_detail"], variable=self._v_detail, command=self._relayout)
         vm.add_checkbutton(label=L_["menu_log"], variable=self._v_log, command=self._relayout)
+        vm.add_separator()
+        vm.add_checkbutton(label=L_.get("menu_history", "History Messages"),
+                           variable=self._v_hist, command=self._toggle_history)
         mb.add_cascade(label=L_["menu_view"], menu=vm)
         sm = tk.Menu(mb, tearoff=0)
         lm = tk.Menu(sm, tearoff=0)
@@ -231,9 +238,34 @@ class MainWindow:
         mb.add_cascade(label=L_["menu_help"], menu=hm)
 
     def _switch_lang(self, code: str) -> None:
-        set_lang(code)
+        set_lang(code)  # saves preference, applies on next start
         messagebox.showinfo(L()["menu_lang"],
             "请重启程序使语言设置生效。\nRestart to apply language change.")
+
+    def _toggle_history(self, force_open: bool = False) -> None:
+        """Open/close/focus the shared history window (Hist button + View menu)."""
+        from gui.history_window import HistoryWindow
+        if force_open:
+            self._v_hist.set(True)  # sync checkbox when Hist button pressed
+        if self._v_hist.get():
+            # Open or focus existing
+            if self._hist_win and self._hist_win.winfo_exists():
+                self._hist_win.deiconify()
+                self._hist_win.lift()
+                self._hist_win.focus_force()
+                return
+            self._hist_win = HistoryWindow(self.root, self._tbl._history_file,
+                                           current_messages=self._tbl._saved)
+            def _on_close():
+                self._v_hist.set(False)
+                if self._hist_win:
+                    self._hist_win.destroy()
+                    self._hist_win = None
+            self._hist_win.protocol("WM_DELETE_WINDOW", _on_close)
+        else:
+            if self._hist_win and self._hist_win.winfo_exists():
+                self._hist_win.destroy()
+                self._hist_win = None
 
     # ── Connection ────────────────────────────────────────────────
 
@@ -248,7 +280,7 @@ class MainWindow:
     def _conn_thread(self, port: str, mcu: str) -> None:
         try:
             tr, hb = detect_and_connect(
-                port=port if port != "auto" else None,
+                port=port if port.upper() != "AUTO" else None,
                 baudrate=self.settings.transport.serial_baud,
             )
             self._q.put(("ok", tr, hb))
@@ -265,6 +297,8 @@ class MainWindow:
         self._dev.set_connected(self._tr.info.port)
         # Update port dropdown from "auto" to the actual port
         self._dev._port_var.set(self._tr.info.port)
+        # Enable send panel on connection
+        self._snd.set_enabled(not self._dev.silent_mode)
         model = hb.get("mcu_model", "Unknown")
         fw = hb.get("fw_version", "?")
         self._status_var.set(
@@ -341,6 +375,7 @@ class MainWindow:
         self._dev_info = {}
         self._caps = {}
         self._dev.set_disconnected()
+        self._snd.set_enabled(False)
         self._status_var.set(L()["disconnected"])
 
     # ── Poll Loop ─────────────────────────────────────────────────
@@ -570,6 +605,10 @@ class MainWindow:
         dlg = tk.Toplevel(self.root); dlg.title(L_["flash_title"])
         dlg.geometry("500x380"); dlg.resizable(False, False)
         dlg.transient(self.root); dlg.grab_set()
+        dlg.update_idletasks()
+        x = (dlg.winfo_screenwidth() - 500) // 2
+        y = (dlg.winfo_screenheight() - 380) // 2
+        dlg.geometry(f"+{x}+{y}")
         f = ttk.Frame(dlg, padding=16); f.pack(fill=tk.BOTH, expand=True)
         ttk.Label(f, text=L_["flash_select"], font=FONT_SECTION).pack(anchor=tk.W)
         mcu = tk.StringVar(value="STM32F103C8T6")
@@ -599,7 +638,10 @@ class MainWindow:
         self.root.geometry(f"+{x}+{y}")
 
     def _on_close(self) -> None:
-        self._snd.stop_cycle(); self._disconnect(); self.root.destroy()
+        self._snd.stop_cycle()
+        self._tbl.save_history_snapshot()
+        self._disconnect()
+        self.root.destroy()
 
     def run(self) -> None:
         self._refresh()

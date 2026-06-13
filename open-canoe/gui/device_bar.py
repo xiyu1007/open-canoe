@@ -44,10 +44,10 @@ class DeviceBar(ttk.Frame):
         sec(L_["com_port"], r); r += 1
         pf = ttk.Frame(self); pf.grid(row=r, column=0, sticky=tk.EW, pady=(0, 4)); r += 1
         pf.columnconfigure(0, weight=1)
-        self._port_var = tk.StringVar(value="auto")
+        self._port_var = tk.StringVar(value="AUTO")
         ports = self._scan()
         self._port_cb = ttk.Combobox(pf, textvariable=self._port_var,
-                                     values=["auto"] + ports, state="readonly", font=FONT_BODY)
+                                     values=["AUTO"] + ports, state="readonly", font=FONT_BODY)
         self._port_cb.grid(row=0, column=0, sticky=tk.EW)
         ttk.Button(pf, text="⟳", width=3, command=self._refresh_ports).grid(row=0, column=1, padx=(4, 0))
 
@@ -87,7 +87,7 @@ class DeviceBar(ttk.Frame):
         return [p.port for p in list_serial_ports()]
 
     def _refresh_ports(self) -> None:
-        self._port_cb["values"] = ["auto"] + self._scan()
+        self._port_cb["values"] = ["AUTO"] + self._scan()
 
     @property
     def selected_mcu(self) -> str: return self._mcu_var.get()
@@ -116,6 +116,13 @@ class DeviceBar(ttk.Frame):
         self._connected = False; L_ = L()
         self._dot.delete("all"); self._dot.create_oval(2, 2, 10, 10, fill=SECONDARY, outline="")
         self._btn.config(text=L_["connect"], state=tk.NORMAL)
+
+    def refresh_lang(self) -> None:
+        L_ = L()
+        if self._connected:
+            self._btn.config(text=L_["disconnect"])
+        else:
+            self._btn.config(text=L_["connect"])
 
     def _toggle(self) -> None:
         if self._connected: self._cb_disc()

@@ -105,9 +105,9 @@ check("8.2.1 CAN ID input", app._snd._id_var.get() == '0x7AB')
 
 # Frame type dropdown (ZH/EN aware)
 app._snd._tp_var.set('扩展')
-check("8.2.2 Frame type ext", '扩展' in app._snd._tp_var.get() or 'Extended' in app._snd._tp_var.get())
+check("8.2.2 Frame type ext", any(w in app._snd._tp_var.get() for w in ['扩展', 'EXT']))
 app._snd._tp_var.set('标准')
-check("8.2.3 Frame type std", '标准' in app._snd._tp_var.get() or 'Standard' in app._snd._tp_var.get())
+check("8.2.3 Frame type std", any(w in app._snd._tp_var.get() for w in ['标准', 'STD']))
 
 # DLC dropdown
 app._snd._dlc_var.set('8')
@@ -154,13 +154,64 @@ for c in app._tbl._tree.get_children():
     rows.append(app._tbl._tree.item(c, 'values'))
 
 check("8.3.1 TX direction", any(len(r) > 5 and r[5] == 'TX' for r in rows))
-check("8.3.2 Standard frame type", any(len(r) > 3 and '标准' in str(r[3]) for r in rows))
+check("8.3.2 Standard frame type", any(len(r) > 3 and ('标准' in str(r[3]) or 'STD' in str(r[3])) for r in rows))
 check("8.3.3 NORMAL mode no RX", sum(1 for r in rows if len(r) > 5 and r[5] == 'RX') == 0)
 
 # Clear table
 app._tbl.clear()
 pump(0.3)
 check("8.3.4 Table clear", len(app._tbl._tree.get_children()) == 0)
+
+# ── Collapse toggle test ──
+print("\n=== §8.3+ Collapse ===")
+# Send 3 unique IDs in expanded mode
+app._snd._data_var.set('11')
+app._snd._dlc_var.set('1')
+for i, cid in enumerate(['0x101', '0x102', '0x101']):
+    app._snd._id_var.set(cid)
+    app._snd._btn_once.invoke()
+    pump(0.5)
+expanded_count = len(app._tbl._tree.get_children())
+check("Collapse.1 Expanded has rows", expanded_count >= 3, f"rows={expanded_count}")
+
+# Toggle collapse
+app._tbl._toggle_collapse()
+pump(0.5)
+collapsed_rows = app._tbl._tree.get_children()
+collapsed_count = len(collapsed_rows)
+check("Collapse.2 Collapsed dedup works", collapsed_count <= 2, f"rows={collapsed_count}")
+
+# Toggle back
+app._tbl._toggle_collapse()
+pump(0.5)
+check("Collapse.3 Expanded again", len(app._tbl._tree.get_children()) >= 3)
+
+# ── Send button disable state ──
+print("\n=== §8.2+ Button state ===")
+# Disconnect and check buttons disabled
+app._disconnect(); pump(1.0)
+check("Btn.1 Send disabled after disconnect", not app._snd._enabled)
+
+# Reconnect and check enabled
+app._dev._port_var.set('COM7')
+app._dev._btn.invoke()
+deadline = time.monotonic() + 15
+while time.monotonic() < deadline:
+    app.root.update(); time.sleep(0.03)
+    if app._tr and app._tr.is_connected: break
+pump(3.0)
+check("Btn.2 Send enabled after connect", app._snd._enabled)
+
+# ── History window ──
+print("\n=== §8.3+ History ===")
+app._v_hist.set(True); app._toggle_history(); pump(0.5)
+check("Hist.1 Window opened", app._hist_win is not None and app._hist_win.winfo_exists())
+app._v_hist.set(False); app._toggle_history(); pump(0.3)
+try:
+    exists = app._hist_win is not None and app._hist_win.winfo_exists()
+except Exception:
+    exists = False
+check("Hist.2 Window closed", not exists)
 
 # ═══════════════════════════════════════════════════════════════
 # §8.4 Menu

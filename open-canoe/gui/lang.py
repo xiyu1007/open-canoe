@@ -34,6 +34,7 @@ ZH = {
     "col_no": "序号", "col_time": "时间", "col_id": "CAN ID",
     "col_type": "类型", "col_dlc": "DLC", "col_data": "数据", "col_ch": "方向",
     "type_std": "标准", "type_ext": "扩展", "type_err": "错误",
+    "type_rtr_std": "远程标准", "type_rtr_ext": "远程扩展",
     "msgs": "条",
     "composer": "报文编辑",
     "can_id": "CAN ID (十六进制)",
@@ -95,6 +96,9 @@ ZH = {
     "menu_send": "发送面板",
     "menu_detail": "信号详情",
     "menu_log": "日志面板",
+    "menu_history": "历史报文",
+    "history_title": "历史报文",
+    "search_hint": "正则 (ID|Data)",
     "menu_settings": "设置",
     "menu_lang": "语言",
     "menu_lang_en": "English",
@@ -151,6 +155,7 @@ EN = {
     "col_no": "No", "col_time": "Time", "col_id": "CAN ID",
     "col_type": "Type", "col_dlc": "DLC", "col_data": "Data", "col_ch": "Dir",
     "type_std": "STD", "type_ext": "EXT", "type_err": "ERR",
+    "type_rtr_std": "RTR STD", "type_rtr_ext": "RTR EXT",
     "msgs": "msgs",
     "composer": "Message Composer",
     "can_id": "CAN ID (hex)",
@@ -212,6 +217,9 @@ EN = {
     "menu_send": "Send Panel",
     "menu_detail": "Signal Details",
     "menu_log": "Log Panel",
+    "menu_history": "History Messages",
+    "history_title": "History Messages",
+    "search_hint": "regex (ID|Data)",
     "menu_settings": "Settings",
     "menu_lang": "Language",
     "menu_lang_en": "English",
@@ -234,13 +242,32 @@ EN = {
                     "See firmware/ directory for source code."),
 }
 
-# _current = EN
-_current = ZH
+import os, json
+from gui.config import APP_DATA_DIR
+
+_LANG_FILE = os.path.join(APP_DATA_DIR, ".lang")
+
+def _load_lang() -> dict:
+    try:
+        with open(_LANG_FILE, "r") as f:
+            code = json.load(f).get("lang", "ZH")
+        return ZH if code == "ZH" else EN
+    except Exception:
+        return ZH
+
+def _save_lang(code: str) -> None:
+    try:
+        with open(_LANG_FILE, "w") as f:
+            json.dump({"lang": code}, f)
+    except Exception:
+        pass
+
+_current = _load_lang()
 
 def L() -> dict: return _current
 
 def set_lang(code: str) -> None:
-    global _current
-    _current = ZH if code == "ZH" else EN
+    # Cold switch: save preference, apply on next startup only
+    _save_lang(code)
 
 def lang_code() -> str: return "ZH" if _current is ZH else "EN"

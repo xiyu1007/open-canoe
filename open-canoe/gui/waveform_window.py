@@ -49,4 +49,10 @@ class WaveformWindow(tk.Toplevel):
                         foreground=SUCCESS if self._cap else SECONDARY)
 
     def show(self) -> None:
-        self.deiconify(); self.lift()
+        self.deiconify()
+        self.update_idletasks()
+        w, h = self.winfo_width(), self.winfo_height()
+        x = (self.winfo_screenwidth() - w) // 2
+        y = (self.winfo_screenheight() - h) // 2
+        self.geometry(f"+{x}+{y}")
+        self.lift()

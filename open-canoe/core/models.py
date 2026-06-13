@@ -23,7 +23,8 @@ class CANMessage:
 
     @property
     def id_str(self) -> str:
-        w = 8 if self.is_extended else 3
+        # Standard: 0x7DF, Extended: 0x1FFFFFFF (no unnecessary padding)
+        w = 0 if self.is_extended else 3
         return f"0x{self.arbitration_id:0{w}X}"
 
     @property
