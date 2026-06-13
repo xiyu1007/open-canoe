@@ -231,15 +231,18 @@ static void handle_can_set_baudrate(const uint8_t *data, uint16_t data_len)
     const can_set_baudrate_t *req = (const can_set_baudrate_t *)data;
     can_status_t ret;
 
-    /* Auto-initialize CAN if not yet initialized */
-    if (!can_is_initialized(req->channel)) {
+    /* Always use can_init (SPL-style direct register writes).
+     * can_set_baudrate uses HAL_CAN_Init which is unreliable on F103.
+     * Deinit first if previously initialized to ensure clean state. */
+    if (can_is_initialized(req->channel)) {
+        can_deinit(req->channel);
+    }
+    {
         can_config_t cfg;
         cfg.channel  = req->channel;
         cfg.baudrate = req->baudrate;
         cfg.mode     = CAN_MODE_NORMAL;
         ret = can_init(req->channel, &cfg);
-    } else {
-        ret = can_set_baudrate(req->channel, req->baudrate);
     }
 
     ack_resp_t ack;
@@ -420,13 +423,15 @@ static void handle_can_send_frame(const uint8_t *data, uint16_t data_len)
         can_start_listen(req->channel);
     }
 
-    /* Disable CAN interrupts during send+poll to prevent ISR storm.
-     * The busy-wait loops use millions of cycles; if any CAN interrupt
-     * fires and the error condition persists, it creates an ISR storm
-     * that starves the main loop. */
+    /* Silence CAN interrupts during the send+poll busy-wait.
+     * Even with IER=0 from can_start_listen, explicitly writing 0 here
+     * clears any residual interrupt state in the CAN peripheral. */
     volatile uint32_t *CAN1_IER = (volatile uint32_t *)0x40006414;
+    volatile uint32_t *CAN1_ESR = (volatile uint32_t *)0x40006418;
     uint32_t saved_ier = *CAN1_IER;
-    *CAN1_IER = 0; /* Disable all CAN1 interrupts */
+    *CAN1_IER = 0;
+    /* Also clear any pending error flags before the busy-wait */
+    *CAN1_ESR |= 0x00000070; /* Clear LEC[2:0] */
 
     /* Send via can_send_frame (fire-and-forget, proper mailbox management) */
     can_status_t ret = can_send_frame(

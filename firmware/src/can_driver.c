@@ -249,15 +249,20 @@ can_status_t can_init(uint8_t channel, const can_config_t *config)
     GPIOA->CRH |= (0x8 << 12) | (0xB << 16);
     GPIOA->ODR |= (1 << 11); /* PA11 pull-up */
 
-    /* NVIC */
-    HAL_NVIC_SetPriority(CAN1_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(CAN1_IRQn);
+    /* NVIC: CAN interrupts are DISABLED at the NVIC level.
+     * All CAN events are poll-driven. IER is still written (saved/cleared/
+     * restored) in handle_can_send_frame because writing IER=0 appears to
+     * have a necessary side-effect on the F103 CAN peripheral. */
 
     /* Initialize CAN using proven SPL-style direct register writes.
      * HAL_CAN_Init has issues on F103 — direct register access is reliable. */
 
-    /* Exit sleep, request init */
+    /* Exit sleep mode (if previously in sleep from can_stop_listen).
+     * Wait for SLAK=0 before requesting init mode. */
     CANx->MCR &= ~CAN_MCR_SLEEP;
+    wait = 1000000;
+    while ((CANx->MSR & CAN_MSR_SLAK) && --wait) {}
+    /* Request init mode */
     CANx->MCR |= CAN_MCR_INRQ;
     wait = 1000000;
     while (!(CANx->MSR & CAN_MSR_INAK) && --wait) {}
@@ -588,7 +593,17 @@ can_status_t can_start_listen(uint8_t channel)
         ctx->listening = 1;
     }
 
-    /* Enable error interrupts only. RX handled by poll in send handler. */
+    /* Clear any stale error flags from previous sessions BEFORE
+     * enabling interrupts. Otherwise pending flags (especially LEC
+     * from failed NORMAL-mode TX) trigger an ISR storm immediately. */
+    __HAL_CAN_CLEAR_FLAG(h, CAN_FLAG_EWG);
+    __HAL_CAN_CLEAR_FLAG(h, CAN_FLAG_EPV);
+    __HAL_CAN_CLEAR_FLAG(h, CAN_FLAG_BOF);
+    h->Instance->ESR |= CAN_ESR_LEC; /* Clear LEC by writing any value */
+
+    /* Enable error interrupts. They are saved/disabled/restored in
+     * handle_can_send_frame during the send+poll busy-wait to prevent
+     * interrupt storms. */
     h->Instance->IER |= 0x10   /* ERRIE: error */
                       | 0x20   /* BOFIE: bus-off */
                       | 0x80;  /* LECIE: last error */
