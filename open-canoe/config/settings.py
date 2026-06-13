@@ -33,6 +33,7 @@ class CANSettings(BaseModel, frozen=True):
 class UISettings(BaseModel, frozen=True):
     theme: str = "light"
     max_log_lines: int = Field(default=100_000, ge=1000)
+    message_limit: int = Field(default=2_000, ge=200, description="Max in-memory messages before offload")
 
 
 class Settings(BaseModel, frozen=True):

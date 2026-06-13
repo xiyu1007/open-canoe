@@ -134,7 +134,8 @@ class MainWindow:
         self._card_trace = ttk.Frame(self._frame_trace, style="Card.TFrame", padding=14)
         self._card_trace.pack(fill=tk.BOTH, expand=True)
         self._card_trace.rowconfigure(0, weight=1); self._card_trace.columnconfigure(0, weight=1)
-        self._tbl = MessageTable(self._card_trace, max_rows=self.settings.ui.max_log_lines)
+        self._tbl = MessageTable(self._card_trace, max_rows=self.settings.ui.max_log_lines,
+                                 message_limit=self.settings.ui.message_limit)
         self._tbl.pack(fill=tk.BOTH, expand=True)
         self._ctr_pane.add(self._frame_trace, weight=1)
 

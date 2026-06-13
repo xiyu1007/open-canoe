@@ -9,13 +9,12 @@ from gui.lang import L
 from core.models import CANMessage, BusStatistics
 
 MAX_VISIBLE = 20_000  # cap tree items to prevent freeze on collapse/expand
-OFFLOAD_KEEP = 1_000  # keep most recent N messages in memory after offload
 
 _HISTORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "history")
 
 
 class MessageTable(ttk.Frame):
-    def __init__(self, parent, max_rows=100_000):
+    def __init__(self, parent, max_rows=100_000, message_limit=2_000):
         super().__init__(parent)
         self._max = max_rows; self._cnt = 0; self._paused = False
         self._stats = BusStatistics()
@@ -26,6 +25,7 @@ class MessageTable(ttk.Frame):
         self._saved: list[tuple[CANMessage, bool, str]] = []  # (msg, is_tx, timestamp)
         self._collapse_cache: dict[tuple, tuple] = {}
         self._history_file: str = ""  # path to current history CSV
+        self._msg_limit = message_limit  # configurable via settings.yaml
         self._build()
 
     def _build(self) -> None:
@@ -226,8 +226,10 @@ class MessageTable(ttk.Frame):
         self._rebuild()
 
     def _offload_check(self) -> None:
-        """Offload oldest messages to CSV when in-memory count exceeds threshold."""
-        if len(self._saved) <= OFFLOAD_KEEP * 2:
+        """Offload oldest half to CSV when in-memory count exceeds limit.
+        Runs immediately in add() — no waiting for collapse/expand."""
+        limit = self._msg_limit
+        if len(self._saved) <= limit:
             return
         os.makedirs(_HISTORY_DIR, exist_ok=True)
         if not self._history_file:
@@ -235,8 +237,8 @@ class MessageTable(ttk.Frame):
                 _HISTORY_DIR,
                 f"canoe_msg_{time.strftime('%Y%m%d_%H%M%S')}.csv"
             )
-        # Offload the oldest half
-        cutoff = len(self._saved) - OFFLOAD_KEEP
+        # Remove the oldest half for performance
+        cutoff = len(self._saved) - max(limit // 2, 1)
         to_offload = self._saved[:cutoff]
         self._saved = self._saved[cutoff:]
         # Rebuild collapse cache from remaining
@@ -244,7 +246,7 @@ class MessageTable(ttk.Frame):
         for msg, is_tx, ts in self._saved:
             key = (msg.arbitration_id, is_tx, msg.is_remote, msg.is_extended)
             self._collapse_cache[key] = (msg, is_tx, ts)
-        # Append to CSV
+        # Append to CSV (header only if new file)
         write_header = not os.path.exists(self._history_file)
         try:
             with open(self._history_file, "a", newline="", encoding="utf-8") as fh:
@@ -253,19 +255,22 @@ class MessageTable(ttk.Frame):
                     L_ = L()
                     w.writerow([L_["col_no"], L_["col_time"], L_["col_id"],
                                 L_["col_type"], L_["col_dlc"], L_["col_ch"], L_["col_data"]])
-                seq = 0
-                for msg, is_tx, ts in to_offload:
-                    seq += 1
+                for i, (msg, is_tx, ts) in enumerate(to_offload):
                     txrx = "TX" if is_tx else "RX"
                     dtype = "ERR" if msg.is_error else ("EXT" if msg.is_extended else "STD")
-                    w.writerow([str(seq), ts, msg.id_str, dtype,
+                    w.writerow([str(i + 1), ts, msg.id_str, dtype,
                                 str(msg.dlc), txrx, msg.data_str])
         except Exception:
             pass
+        # Also offload from tree if not collapsed (trim oldest tree items)
+        if not self._collapsed:
+            self._rebuild()
 
     def _open_history(self) -> None:
         from gui.history_window import HistoryWindow
-        HistoryWindow(self.winfo_toplevel(), self._history_file)
+        # Pass current in-memory messages + history file so Hist shows ALL
+        HistoryWindow(self.winfo_toplevel(), self._history_file,
+                      current_messages=self._saved)
 
     @property
     def paused(self) -> bool: return self._paused

@@ -17,3 +17,4 @@ can:
 ui:
   theme: light
   max_log_lines: 100000
+  message_limit: 2000      # max in-memory messages; oldest half offloaded to CSV when exceeded
