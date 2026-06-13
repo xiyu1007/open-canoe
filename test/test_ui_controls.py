@@ -1,8 +1,10 @@
 """Complete UI control test — tests every button, checkbox, dropdown per REQUIREMENTS.md §8."""
 import os, sys, time
 
-os.environ['HOME'] = 'C:/Users/GX'
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'open-canoe'))
+if 'HOME' not in os.environ:
+    os.environ['HOME'] = os.path.expanduser('~')
+_PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_PROJ_ROOT, 'open-canoe'))
 
 from gui.app import MainWindow
 

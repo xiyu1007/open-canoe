@@ -9,10 +9,10 @@ Performs the full workflow:
   4. (optional) Launch the desktop app
 
 Usage:
-  python scripts/deploy.py f103              # Build, flash, test F103
-  python scripts/deploy.py f103 --run-app    # Build, flash, test, launch app
-  python scripts/deploy.py f103 --test-only  # Run tests only (no build/flash)
-  python scripts/deploy.py f103 --port COM7  # Use specific port for tests
+  python tools/deploy.py f103              # Build, flash, test F103
+  python tools/deploy.py f103 --run-app    # Build, flash, test, launch app
+  python tools/deploy.py f103 --test-only  # Run tests only (no build/flash)
+  python tools/deploy.py f103 --port COM7  # Use specific port for tests
 
 Output: JSON status for each step.
 """
@@ -30,10 +30,11 @@ TOOLS_DIR = os.path.join(PROJECT_DIR, "tools")
 FW_DIR = os.path.join(PROJECT_DIR, "firmware")
 APP_DIR = os.path.join(PROJECT_DIR, "open-canoe")
 TEST_DIR = os.path.join(PROJECT_DIR, "test")
-ST_FLASH = os.path.join(
-    PROJECT_DIR, "assert",
-    "stlink-1.7.0-x86_64-w64-mingw32",
-    "stlink-1.7.0-x86_64-w64-mingw32", "bin", "st-flash.exe"
+# External tool paths — use environment variables with fallbacks
+ST_FLASH = os.environ.get(
+    "ST_FLASH",
+    os.path.join(PROJECT_DIR, "assert", "stlink-1.7.0-x86_64-w64-mingw32",
+                 "stlink-1.7.0-x86_64-w64-mingw32", "bin", "st-flash.exe")
 )
 
 TARGETS = {
@@ -53,8 +54,8 @@ TARGETS = {
     },
 }
 
-MAKE_PATH = "d:/Software/msys64/usr/bin/make.exe"
-GCC_PATH = "d:/STM32/Environment/gcc-arm-none-eabi-10.3-2021.10/bin"
+MAKE_PATH = os.environ.get("MAKE_PATH", "make")
+GCC_PATH = os.environ.get("GCC_PATH", "")
 
 
 def find_com_port():
@@ -139,6 +140,7 @@ def run_tests(target, port=None, baudrate=115200):
             port = "COM7"
 
     sys.path.insert(0, APP_DIR)
+    sys.path.insert(0, TEST_DIR)
     from test_hardware import run_tests as _run_tests
 
     # Redirect test output to capture
@@ -164,9 +166,9 @@ def run_tests(target, port=None, baudrate=115200):
 def launch_app(port=None):
     """Launch the desktop GUI application."""
     step("Launching App")
-    cmd = [sys.executable, "main.py"]
-    print(f"  Starting: cd {APP_DIR} && python main.py")
-    subprocess.Popen(cmd, cwd=APP_DIR)
+    main_py = os.path.join(APP_DIR, "main.py")
+    print(f"  Starting: {sys.executable} {main_py}")
+    subprocess.Popen([sys.executable, main_py], cwd=APP_DIR)
 
 
 def main():

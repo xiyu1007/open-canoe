@@ -133,10 +133,15 @@ canoe/
 │
 ├── test/                         # Test scripts
 │   ├── test_protocol.py          # Protocol codec unit tests
-│   └── test_hardware.py          # Full hardware integration test
+│   ├── test_hardware.py          # Full hardware integration test
+│   ├── test_gui_full.py          # 27-step CAN flow GUI test
+│   ├── test_ui_controls.py       # 33-item UI controls GUI test
+│   └── test_app.py               # App simulation test (no GUI)
 │
-└── tools/                        # Build & test utilities
+└── tools/                        # Build & deploy utilities
     ├── build.py                  # Unified build/flash tool
+    ├── deploy.py                 # One-click deploy (build+flash+test+launch)
+    ├── deploy.bat                # Windows batch deploy
     ├── send_cmd.py               # Single protocol command sender
     └── test_pyserial.py          # Full protocol test suite
 ```
@@ -184,6 +189,13 @@ uv run python ../test/test_protocol.py
 uv run python ../test/test_hardware.py COM7          # Full test suite
 uv run python ../test/test_hardware.py COM7 --loopback  # Loopback quick test
 uv run python ../test/test_hardware.py --scan           # Scan for devices
+
+# GUI integration tests (requires flashed probe on COM7)
+uv run python ../test/test_gui_full.py               # 27-step CAN flow test
+uv run python ../test/test_ui_controls.py            # 33-item UI controls test
+
+# App simulation test (no GUI)
+uv run python ../test/test_app.py COM7
 ```
 
 ### Documentation
@@ -332,6 +344,13 @@ uv run python ../test/test_protocol.py
 uv run python ../test/test_hardware.py COM7          # 完整测试
 uv run python ../test/test_hardware.py COM7 --loopback  # 环回快速测试
 uv run python ../test/test_hardware.py --scan           # 扫描设备
+
+# GUI 集成测试（需要 COM7 上已烧录的探针）
+uv run python ../test/test_gui_full.py               # 27 步 CAN 流程测试
+uv run python ../test/test_ui_controls.py            # 33 项 UI 控件测试
+
+# App 模拟测试（无需 GUI）
+uv run python ../test/test_app.py COM7
 ```
 
 ### 文档

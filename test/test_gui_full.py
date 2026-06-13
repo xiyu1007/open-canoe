@@ -4,10 +4,13 @@ Per REQUIREMENTS.md §10: 9-step test criteria.
 """
 import os, sys, time
 
-os.environ['HOME'] = 'C:/Users/GX'
+# HOME dir for tkinter — use env var if set, otherwise user home
+if 'HOME' not in os.environ:
+    os.environ['HOME'] = os.path.expanduser('~')
 
-# Add project to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'open-canoe'))
+# Add open-canoe/ to path (project root = parent of test/)
+_PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_PROJ_ROOT, 'open-canoe'))
 
 from gui.app import MainWindow  # noqa: E402
 

@@ -7,10 +7,10 @@ to the CAN probe. This tests the complete App→FW→App communication cycle
 without needing to run the tkinter GUI.
 
 Usage:
-  python scripts/test_app.py COM7              # Run all app simulation tests
-  python scripts/test_app.py COM7 --loopback   # Loopback mode tests only
-  python scripts/test_app.py --scan            # Auto-detect and test
-  python scripts/test_app.py COM7 --cycle 100  # Cycle send 100 frames at 100ms
+  python test/test_app.py COM7              # Run all app simulation tests
+  python test/test_app.py COM7 --loopback   # Loopback mode tests only
+  python test/test_app.py --scan            # Auto-detect and test
+  python test/test_app.py COM7 --cycle 100  # Cycle send 100 frames at 100ms
 
 Simulates these app operations:
   1. Device discovery / heartbeat

@@ -47,17 +47,15 @@ tools/
   build.py                   (unified build/flash, JSON output)
   send_cmd.py                (single protocol command)
   test_pyserial.py           (full protocol test suite)
-
-scripts/
-  deploy.py                  (one-click build + flash + test)
-  test_app.py                (app simulation test, no GUI needed)
+  deploy.py                  (one-click build + flash + test + launch)
+  deploy.bat                 (Windows batch one-click deploy)
 
 test/
   test_protocol.py           (protocol codec unit tests, no hardware needed)
   test_hardware.py           (full hardware integration test suite)
-
-test_gui_full.py             (27-step CAN flow GUI test, invoke() based)
-test_ui_controls.py          (33-item UI controls GUI test)
+  test_gui_full.py           (27-step CAN flow GUI test, invoke() based)
+  test_ui_controls.py        (33-item UI controls GUI test)
+  test_app.py                (app simulation test, no GUI needed)
 
 REQUIREMENTS.md              (test requirements, historical bugs, cross-module rules)
 ```
@@ -159,6 +157,14 @@ CRC:   CRC-CCITT, polynomial 0x1021, initial value 0xFFFF
 - Per-chip firmware adaptations use `#ifdef STM32F103xB`/`#ifdef STM32F407xx`
 - CubeMX-origin files must NOT be modified — verified by `diff -rq`
 - C naming: `module_verb` / `module_noun`; structs use `typedef`; each `.c`/`.h` has file header
+
+## Path Rules
+
+- **All paths within the project must be relative.** Use `os.path.dirname(__file__)` and `os.path.join(_PROJ_ROOT, ...)`.
+- **Paths outside the project use environment variables** with fallbacks. Never hardcode absolute paths like `C:/Users/...` or `d:/Software/...`.
+- External tool paths are read from env vars: `ST_FLASH`, `MAKE_PATH`, `GCC_PATH`, `HOME`.
+- Test/deploy scripts in `test/` and `tools/` reference `open-canoe/` via `_PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))`.
+- `HOME` env var for tkinter: `os.environ.get('HOME', os.path.expanduser('~'))`.
 
 ### Key Build Differences Between MCUs
 
