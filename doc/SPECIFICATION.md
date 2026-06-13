@@ -581,7 +581,7 @@ User selects MCU, clicks OK
   │
   ▼
 App: Disconnects from device
-  │  Runs: python tools/build.py flash <target>
+  │  Runs: uv run python tools/deploy.py
   │  Captures JSON output, displays progress
   │
   ▼
@@ -705,9 +705,9 @@ To add e.g., STM32H750VB:
 2. **Create `stm32h7xx_config.h`** — define all macros listed in existing config headers
 3. **Create `stm32h7xx_hal_conf.h`** — enable required HAL modules
 4. **Create `Makefile_h7`** — copy existing, adjust `MCU_DIR`, CPU/FPU flags, `-D` define
-5. **Register in `tools/build.py`** TARGETS dict
+5. **Register in `tools/deploy.py`** TARGETS dict
 6. **If FDCAN (non-legacy)**: add `#if defined(STM32H750xx)` sections in `can_driver.c`
-7. **No changes to `inc/`, other `src/` files, or `tools/send_cmd.py`**
+7. **No changes to `inc/`, other `src/` files, or App code**
 
 ### 5.4 Key Constraints
 
@@ -725,28 +725,25 @@ To add e.g., STM32H750VB:
 
 ```
 open-canoe/
-├── main.py                       # Entry: python main.py
-├── pyproject.toml                # Dependencies: pyserial, pydantic, pyyaml
-├── settings.yaml                 # User configuration (optional)
-├── canoe/
-│   ├── config/
-│   │   ├── defaults.yaml         # Shipped default settings
-│   │   └── settings.py           # Pydantic YAML loader
-│   ├── core/
-│   │   ├── models.py             # CANMessage, BusStatistics (dataclasses)
-│   │   ├── protocol.py           # [TO REFACTOR] Protocol encode/decode
-│   │   └── transport.py          # [TO REFACTOR] Serial transport + device detection
-│   └── gui/
-│       ├── app.py                # MainWindow orchestrator [MINOR CHANGES]
-│       ├── config.py             # Colors, fonts, bitrates, MCU targets
-│       ├── lang.py               # ZH/EN string tables
-│       ├── device_bar.py         # Left sidebar [MINOR CHANGES]
-│       ├── message_table.py      # Center: ttk.Treeview [NO CHANGES]
-│       ├── send_panel.py         # Right: composer, cycle, presets [NO CHANGES]
-│       ├── detail_panel.py       # Bottom: raw/decoded view [NO CHANGES]
-│       ├── log_panel.py          # Bottom: colored log [NO CHANGES]
-│       └── waveform_window.py    # Popup: oscilloscope [NO CHANGES]
-└── firmware/                     # [Already present, see §5]
+├── main.py                       # Entry: uv run python main.py
+├── pyproject.toml                # Dependencies: pyserial, pyyaml
+├── config/
+│   └── defaults.yaml             # Single configuration file
+├── core/
+│   ├── models.py                 # CANMessage, BusStatistics (dataclasses)
+│   ├── protocol.py               # Protocol encode/decode
+│   └── transport.py              # Serial transport + device detection
+└── gui/
+    ├── app.py                    # MainWindow orchestrator
+    ├── config.py                 # Colors, fonts, bitrates, load_config()
+    ├── lang.py                   # ZH/EN string tables
+    ├── device_bar.py             # Left sidebar
+    ├── message_table.py          # Center: ttk.Treeview, collapse, offload
+    ├── send_panel.py             # Right: composer, cycle, filter
+    ├── detail_panel.py           # Bottom: raw/decoded view
+    ├── log_panel.py              # Bottom: colored log
+    ├── history_window.py         # Popup: regex search, export
+    └── waveform_window.py        # Popup: oscilloscope
 ```
 
 ### 6.2 GUI Component Rules
@@ -1360,7 +1357,7 @@ Open-Canoe 是一款开源 CAN 总线分析仪，由两个组件构成：
 1. 创建 `firmware/xxx/`，从 CubeMX 复制文件
 2. 创建 `stm32xxx_config.h` + `stm32xxx_hal_conf.h`
 3. 创建 `Makefile_xxx`
-4. 在 `tools/build.py` 注册
+4. 在 `tools/deploy.py` 注册
 
 **不需要修改 `inc/`、`src/` 或 `tools/` 中的任何文件。**
 

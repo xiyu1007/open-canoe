@@ -18,19 +18,21 @@ The test requirements document is [doc/REQUIREMENTS.md](doc/REQUIREMENTS.md).
 
 ```
 open-canoe/
-  main.py → canoe/gui/app.py (MainWindow)
-    ├── gui/lang.py          (ZH/EN string tables)
-    ├── gui/config.py        (colors, fonts, bitrates, MCU targets)
-    ├── gui/device_bar.py    (left: MCU, COM port, connect toggle, flash)
-    ├── gui/message_table.py (center: ttk.Treeview, color tags)
-    ├── gui/send_panel.py    (right: composer, cycle, presets)
-    ├── gui/detail_panel.py  (bottom: raw/decoded signal view)
-    ├── gui/log_panel.py     (bottom: colored log)
-    ├── gui/waveform_window.py (popup: oscilloscope view)
-    ├── core/protocol.py     (binary frame codec — MUST match firmware/inc/protocol.h)
-    ├── core/transport.py    (serial/USB CDC, auto-detect)
-    ├── core/models.py       (CANMessage, BusStatistics)
-    └── config/settings.py   (Pydantic YAML loader)
+  main.py → gui/app.py (MainWindow)
+    ├── config/defaults.yaml    (single configuration file — app/transport/can/ui)
+    ├── gui/config.py           (colors, fonts, bitrates, load_config())
+    ├── gui/lang.py             (ZH/EN dict, cold-switch persistence)
+    ├── gui/device_bar.py       (left: MCU, COM port, connect, flash)
+    ├── gui/message_table.py    (center: ttk.Treeview, collapse, offload)
+    ├── gui/send_panel.py       (right: composer, cycle, filter radio)
+    ├── gui/detail_panel.py     (bottom: raw/decoded signal view)
+    ├── gui/log_panel.py        (bottom: colored log)
+    ├── gui/history_window.py   (popup: regex search, export, type filter)
+    ├── gui/waveform_window.py  (popup: oscilloscope view)
+    ├── core/protocol.py        (binary frame codec — MUST match firmware/inc/protocol.h)
+    ├── core/transport.py       (serial/USB CDC, auto-detect)
+    ├── core/models.py          (CANMessage, BusStatistics)
+    └── attachment/             (sponsor QR images)
 
 firmware/
   inc/                       (hardware-independent API headers)
@@ -45,20 +47,21 @@ firmware/
   Makefile_f103, Makefile_f407
 
 tools/
-  build.py                   (unified build/flash, JSON output)
-  send_cmd.py                (single protocol command)
-  test_pyserial.py           (full protocol test suite)
-  deploy.py                  (one-click build + flash + test + launch)
-  deploy.bat                 (Windows batch one-click deploy)
+  deploy.py                  (build + flash + launch)
+  deploy.bat                 (Windows batch launcher)
+  clean.py                   (clean __pycache__/.venv/build dirs)
+  clean.bat                  (Windows batch launcher)
 
 test/
   test_protocol.py           (protocol codec unit tests, no hardware needed)
-  test_hardware.py           (full hardware integration test suite)
-  test_gui_full.py           (27-step CAN flow GUI test, invoke() based)
-  test_ui_controls.py        (33-item UI controls GUI test)
+  test_hardware.py           (full hardware integration test)
+  test_gui_full.py           (27-step CAN flow GUI test)
+  test_ui_controls.py        (40-item UI controls GUI test)
   test_app.py                (app simulation test, no GUI needed)
 
-REQUIREMENTS.md              (test requirements, historical bugs, cross-module rules)
+doc/
+  SPECIFICATION.md           (protocol & architecture spec)
+  REQUIREMENTS.md            (test requirements, 30+ bugs, cross-module rules)
 ```
 
 ## Run App
@@ -71,14 +74,10 @@ uv run python main.py
 ## Build Firmware
 
 ```bash
-cd tools
-python build.py list              # List targets (JSON)
-python build.py build f103        # Build STM32F103C8T6
-python build.py flash f103        # Build + flash via ST-Link
-python build.py clean f103        # Clean
+python tools/deploy.py              # Build + flash + launch (one command)
 
 # Manual
-cd ../firmware
+cd firmware
 make -f Makefile_f103
 ```
 
@@ -94,10 +93,10 @@ uv run python ../test/test_hardware.py COM7
 uv run python ../test/test_hardware.py --scan
 
 # Full GUI integration test (27 steps, requires flashed probe on COM7)
-uv run python ../test_gui_full.py
+uv run python ../test/test_gui_full.py
 
-# UI controls test (33 items, requires flashed probe on COM7)
-uv run python ../test_ui_controls.py
+# UI controls test (40 items, requires flashed probe on COM7)
+uv run python ../test/test_ui_controls.py
 ```
 
 **doc/REQUIREMENTS.md** is the authoritative test specification. Read it before modifying any firmware or App logic. It contains:
@@ -147,7 +146,7 @@ CRC:   CRC-CCITT, polynomial 0x1021, initial value 0xFFFF
    - `HAL/Inc/` all files, `HAL/Src/` only used modules (never modify)
 2. **Add config files** — `stm32xxx_config.h` + `stm32xxx_hal_conf.h` (use existing as template)
 3. **Create `Makefile_xxx`** — copy existing, adjust MCU_DIR, flags, defines
-4. **Register in `tools/build.py`** TARGETS dict
+4. **Register in `tools/deploy.py`** TARGETS dict
 5. **No changes** to `src/`, `inc/`, `tools/`, or App code
 
 ## Editing Rules
